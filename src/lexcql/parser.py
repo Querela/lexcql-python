@@ -2,19 +2,24 @@ import logging
 from abc import ABCMeta
 from abc import abstractmethod
 from collections import deque
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 from typing import Deque
+from typing import Generic
 from typing import List
 from typing import Optional
 from typing import Type
 from typing import TypeVar
+from typing import Union
 
 import antlr4
 import antlr4.error.ErrorListener
 from antlr4 import CommonTokenStream
 from antlr4 import InputStream
 from antlr4 import ParserRuleContext
+from antlr4 import Token
+from antlr4.Recognizer import Recognizer
 from antlr4.tree.Tree import TerminalNodeImpl
 
 from lexcql.LexLexer import LexLexer
@@ -26,6 +31,7 @@ from lexcql.LexParserVisitor import LexParserVisitor
 LOGGER = logging.getLogger(__name__)
 
 _T = TypeVar("_T", bound="QueryNode")
+_R = TypeVar("_R")
 
 # ---------------------------------------------------------------------------
 
@@ -65,13 +71,13 @@ class RBoolean(str, Enum):
 # ---------------------------------------------------------------------------
 
 
-class QueryVisitor(metaclass=ABCMeta):
+class QueryVisitor(Generic[_R], metaclass=ABCMeta):
     """Interface implementing a Visitor pattern for LexCQL expression trees.
 
     Default method implementations do nothing.
     """
 
-    def visit(self, node: "QueryNode") -> None:
+    def visit(self, node: "QueryNode") -> Optional[_R]:
         """Visit a query node. Generic handler, dispatches to visit methods
         based on `QueryNodeType` if exists else do nothing::
 
@@ -81,29 +87,121 @@ class QueryVisitor(metaclass=ABCMeta):
             node: the node to visit
 
         Returns:
-            ``None``
+            _R: visitation result or ``None`` (see `defaultResult()`)
         """
         if not node:
             return None
 
-        def noop(node):
-            pass
+        def noop(node: "QueryNode") -> Optional[_R]:
+            return self.defaultResult()
 
         # search for specific visit function based on node_type
-        method = getattr(self, f"visit_{node.node_type}", noop)
+        method_name = f"visit_{node.node_type}"
+        method = getattr(self, method_name, noop)
 
-        method(node)
+        return method(node)
+
+    # ----------------------------------------------------
+    # same as antlr4.tree.Tree.ParseTreeVisitor
+
+    def visitChildren(self, node: "QueryNode") -> _R:
+        result = self.defaultResult()
+        for i in range(node.child_count):
+            if not self.shouldVisitNextChild(node, result):
+                return result
+
+            child = node.get_child(i)
+            assert child is not None, f"child#{i} must not be None in {node=}"
+            childResult = child.accept(self)
+            result = self.aggregateResult(result, childResult)
+
+        return result
+
+    def defaultResult(self) -> Optional[_R]:
+        return None
+
+    def aggregateResult(self, aggregate: _R, nextResult: _R) -> _R:
+        return nextResult
+
+    def shouldVisitNextChild(self, node: "QueryNode", currentResult: _R) -> bool:
+        return True
+
+
+class QueryVisitorAdapter(QueryVisitor[_R]):
+    """This class provides an empty implementation of ``QueryVisitor``,
+    which can be extended to create a visitor which only needs to handle
+    a subset of the available methods.
+
+    Generic with regards to the return type of the visit operation.
+    """
+
+    def visit_SearchClauseGroup(self, node: "SearchClauseGroup") -> _R:
+        """Visit a *search_clause_group* query node.
+
+        Args:
+            node: the node to visit
+
+        Returns:
+            _R: visitation result
+        """
+        return self.visitChildren(node)
+
+    def visit_Subquery(self, node: "Subquery") -> _R:
+        """Visit a *subquery* query node.
+
+        Args:
+            node: the node to visit
+
+        Returns:
+            _R: visitation result
+        """
+        return self.visitChildren(node)
+
+    def visit_SearchClause(self, node: "SearchClause") -> _R:
+        """Visit a *search_clause* query node.
+
+        Args:
+            node: the node to visit
+
+        Returns:
+            _R: visitation result
+        """
+        return self.visitChildren(node)
+
+    def visit_Relation(self, node: "Relation") -> _R:
+        """Visit a *relation* query node.
+
+        Args:
+            node: the node to visit
+
+        Returns:
+            _R: visitation result
+        """
+        return self.visitChildren(node)
+
+    def visit_Modifier(self, node: "Modifier") -> _R:
+        """Visit a *modifier* query node.
+
+        Args:
+            node: the node to visit
+
+        Returns:
+            _R: visitation result
+        """
+        return self.visitChildren(node)
 
 
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
 class SourceLocation:
     """Source information wrapping start and stop offsets in the query text for a query node."""
 
-    def __init__(self, start: int, stop: int):
-        self.start = start
-        self.stop = stop
+    start: int
+    """Start offset in raw query string"""
+    stop: int
+    """End offset in raw query string"""
 
     @staticmethod
     def fromContext(ctx: ParserRuleContext):
@@ -116,7 +214,19 @@ class SourceLocation:
 
         start = ctx.start.start
         stop = ctx.stop.stop + 1
-        # NOTE: stop+1 for Java string indexing
+        # NOTE: stop+1 for Java/Python string indexing
+        return SourceLocation(start, stop)
+
+    @staticmethod
+    def fromToken(tok: Token):
+        if tok.start is None or tok.start == -1:
+            return None
+        if tok.stop is None or tok.stop == -1:
+            return None
+
+        start = tok.start
+        stop = tok.stop + 1
+        # NOTE: stop+1 for Java/Python string indexing
         return SourceLocation(start, stop)
 
     def __str__(self):
@@ -296,19 +406,30 @@ class Modifier(QueryNode):
 class Relation(QueryNode):
     """A LexCQL expression tree relation node."""
 
-    def __init__(self, relation: str, modifiers: List[Modifier]):
+    def __init__(self, relation: str, modifiers: Optional[List[Modifier]] = None):
         """[Constructor]
 
         Args:
             relation: the relation name or symbol
             modifiers: the list of modifiers for this relation or ``None``
         """
-        super().__init__(QueryNodeType.RELATION)
+        super().__init__(QueryNodeType.RELATION, children=modifiers)
 
         self.relation = relation
         """the relation"""
-        self.modifiers = modifiers
-        """the relation modifiers"""
+
+    def get_modifiers(self) -> List[Modifier]:
+        """Get the modifiers.
+
+        Returns:
+            List[Modifier]: the modifiers
+        """
+        return self.children
+
+    @property
+    def modifiers(self) -> List[Modifier]:
+        """the list of modifiers for this relation or ``None``"""
+        return self.get_modifiers()
 
     def __str__(self):
         parts = list()
@@ -336,14 +457,25 @@ class SearchClause(QueryNode):
             relation: the relation or ``None``
             search_term: the search term
         """
-        super().__init__(QueryNodeType.SEARCH_CLAUSE)
+        super().__init__(QueryNodeType.SEARCH_CLAUSE, child=relation)
 
         self.index = index if (index is not None and index.strip()) else None
         """the index (or field) or ``None``"""
-        self.relation = relation
-        """the relation. or ``None``"""
         self.search_term = search_term
         """the search term"""
+
+    def get_relation(self) -> Optional[Relation]:
+        """Get the relation.
+
+        Returns:
+            Optional[Relation]: the relation or ``None``
+        """
+        return self.get_child(0, Relation)
+
+    @property
+    def relation(self) -> Optional[Relation]:
+        """the relation or ``None``"""
+        return self.get_relation()
 
     def has_index_and_relation(self) -> bool:
         """Check if index and relation in this search clause are set.
@@ -505,25 +637,54 @@ class Subquery(QueryNode):
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class ErrorDetail:
+    message: str
+    position: Optional[Union[int, SourceLocation]] = None
+    fragment: Optional[str] = None
+
+
 class ErrorListener(antlr4.error.ErrorListener.ErrorListener):
     def __init__(self, query: str) -> None:
         super().__init__()
         self.query = query
-        self.errors: List[str] = list()
+        self.errors: List[ErrorDetail] = list()
 
-    def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
+    def syntaxError(
+        self, recognizer: Recognizer, offendingSymbol: Optional[Token], line: int, column: int, msg: str, e
+    ):
         # FIXME: additional information of error should not be logged but added
         # to the list of errors; that list probably needs to be enhanced to
-        # store supplementary information Furthermore, a sophisticated
-        # errorlist implementation could also be used by the QueryVistor to add
-        # addition query error information
+        # store supplementary information.
+        # Furthermore, a sophisticated errorlist implementation could also be
+        # used by the QueryVistor to add addition query error information.
+
+        pos = None
+        fragment = None
+        if isinstance(offendingSymbol, Token):
+            pos = offendingSymbol.start
+            fragment = self.query[: pos + len(offendingSymbol.text)]
+
         if LOGGER.isEnabledFor(logging.DEBUG):
-            if isinstance(offendingSymbol, antlr4.Token):
-                pos = offendingSymbol.start
-                if pos != -1:
-                    LOGGER.debug("query: %s", self.query)
-                    LOGGER.debug("       %s^- %s", " " * pos, msg)
-        self.errors.append(msg)
+            if pos is not None and pos != -1:
+                LOGGER.debug("query: %s", self.query)
+                LOGGER.debug("       %s^- %s", " " * pos, msg)
+
+            if isinstance(recognizer, LexParser):
+                LOGGER.debug("symbol: %s", recognizer.symbolicNames[offendingSymbol.type])
+                LOGGER.debug("literal: %s", recognizer.literalNames[offendingSymbol.type])
+                LOGGER.debug("token idx: %s", offendingSymbol.tokenIndex)
+
+        if pos is None:
+            pos = column
+
+        self.errors.append(
+            ErrorDetail(
+                message=msg,
+                position=SourceLocation.fromToken(offendingSymbol) if isinstance(offendingSymbol, Token) else pos,
+                fragment=fragment,
+            )
+        )
 
     def has_errors(self) -> bool:
         return bool(self.errors)
@@ -542,9 +703,6 @@ class ExpressionTreeBuilder(LexParserVisitor):
         super().__init__()
         self.parser = parser
         self.stack: Deque[Any] = deque()
-
-        self.stack_Modifier_list: Deque[int] = deque()
-        """for `enterModifier_list`/`exitModifier_list`"""
 
     # ----------------------------------------------------
 
@@ -877,6 +1035,9 @@ class QueryParser:
         self.enableSourceLocations = enableSourceLocations
         """Whether source locations are computed for each query node."""
 
+        self.errors: List[ErrorDetail] = list()
+        """List of errors when parsing fails."""
+
     def parse(self, query: str) -> QueryNode:
         """Parse query.
 
@@ -920,14 +1081,16 @@ class QueryParser:
                     for msg in error_listener.errors:
                         LOGGER.debug("ERROR: %s", msg)
 
-                # FIXME: (include additional error information)
-                raise QueryParserException((error_listener.errors or ["unspecified error"])[0])
+                raise QueryParserException("unable to parse query")
         except ExpressionTreeBuilderException as ex:
             raise QueryParserException(str(ex)) from ex
         except QueryParserException:
             raise
         except Exception as ex:
             raise QueryParserException("an unexpected exception occured while parsing") from ex
+        finally:
+            # update list of errors
+            self.errors = error_listener.errors
 
 
 # ---------------------------------------------------------------------------
