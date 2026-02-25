@@ -556,7 +556,7 @@ wheels = [
 ]
 
 [[package]]
-name = "lexcql"
+name = "lexcql-parser"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [

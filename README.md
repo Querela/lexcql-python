@@ -2,6 +2,67 @@
 
 A query parser for LexCQL, the query language for lexical resources in the CLARIN Federated Content Search (FCS).
 
+## Installation
+
+Install from PyPI:
+
+```bash
+python3 -m pip install lexcql-parser
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/Querela/lexcql-python.git
+cd lexcql-python
+uv build
+
+# built package
+python3 -m pip install dist/lexcql_parser-<version>-py3-none-any.whl
+# or
+python3 -m pip install dist/lexcql_parser-<version>.tar.gz
+
+# for local development
+python3 -m pip install -e .
+```
+
+## Usage
+
+The high-level interface `lexcql.parser.QueryParser` wraps the ANTLR4 parse tree into a simplified query node tree that is easier to work with. The `lexcql-parser` exposes a simple parsing function with `lexcql.parse(input: str, enableSourceLocations: bool = True) -> lexcql.parser.QueryNode`:
+
+```python
+import lexcql
+
+## parsing a valid query into a query node tree
+# our query input string
+input = "Banane Or lemma =/lang=eng apple"
+# parse into QueryNode tree
+sc = lexcql.parse(input)
+# print stringified tree
+print(str(sc))
+
+## handling possibly invalid queries
+input = "broken query"
+try:
+    lexcql.parse(input)
+except lexcql.QueryParserException as ex:
+    print(f"Error: {ex}")
+```
+
+You can also use the more low-level ANTLR4 framework to parse the query string. A handy wrapper is provided with `lexcql.antlr_parse(input: str) -> LexParser.QueryContext`.
+
+```python
+from antlr4 import CommonTokenStream, InputStream
+from lexcql.parser import LexLexer, LexParser
+
+input = "example"
+input_stream = InputStream(input)
+lexer = LexLexer(input_stream)
+stream = CommonTokenStream(lexer)
+parser = LexParser(stream)
+tree: LexParser.QueryContext = parser.query()
+```
+
 ## Development
 
 Fetch (or update) grammar files:
@@ -35,6 +96,15 @@ uv run flake8 . --show-source --statistics
 uv run isort --check --diff .
 ```
 
+Run tests:
+
+```bash
+# setup environment
+uv sync --extra test
+
+uv run pytest
+```
+
 Run check before publishing:
 
 ```bash
@@ -46,11 +116,12 @@ uv build
 # run metadata check
 uv run twine check --strict dist/*
 # (manual) check of package contents
-tar tvf dist/lexcql-*.tar.gz
+tar tvf dist/lexcql_parser-*.tar.gz
 ```
 
 ## See also
 
-- [clarin-eric/fcq-ql](https://github.com/clarin-eric/fcs-ql)
-- [Specification on CLARIN FCS 2](https://www.clarin.eu/content/federated-content-search-clarin-fcs-technical-details)
-- [Specification on LexFCS](https://doi.org/10.5281/zenodo.7849753)
+- [clarin-eric/fcq-ql](https://github.com/clarin-eric/fcs-ql) - FCS-QL/LexCQL Parser (Java)
+- [Querela/fcs-ql-python](https://github.com/Querela/fcs-ql-python) - FCS-QL Parser (Python)
+- [Specification on CLARIN FCS 2](https://www.clarin.eu/content/federated-content-search-clarin-fcs-technical-details) - CLARIN FCS Overview
+- [Specification on LexFCS](https://doi.org/10.5281/zenodo.7849753) - Published LexFCS Specification

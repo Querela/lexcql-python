@@ -2,9 +2,9 @@ from antlr4 import CommonTokenStream
 from antlr4 import InputStream
 from antlr4.error.ErrorListener import ErrorListener
 
-from lexcql.LexLexer import LexLexer
-from lexcql.LexParser import LexParser
-from lexcql.LexParserListener import LexParserListener  # noqa: F401
+from lexcql.parser import LexLexer
+from lexcql.parser import LexParser
+from lexcql.parser import LexParserListener  # noqa: F401
 from lexcql.parser import QueryNode
 from lexcql.parser import QueryParser
 from lexcql.parser import QueryParserException  # noqa: F401
@@ -50,6 +50,22 @@ def parse(input: str, enableSourceLocations: bool = True) -> QueryNode:
     """
     parser = QueryParser(enableSourceLocations=enableSourceLocations)
     return parser.parse(input)
+
+
+def can_parse(input: str):
+    """Simple wrapper to check if the input string can be sucsessfully parsed.
+
+    Args:
+        input: raw input query string
+
+    Returns:
+        bool: ``True`` if query can be parsed, ``False`` otherwise.
+    """
+    try:
+        parse(input)
+        return True
+    except QueryParserException:
+        return False
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 [project]
-name = "lexcql"
+name = "lexcql-parser"
 version = "1.0.0"
 description = "LexCQL Query Grammar and Parser"
 readme = "README.md"
@@ -61,6 +61,7 @@ requires = ["uv_build>=0.10.2,<0.11.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
+module-name = "lexcql"
 source-exclude = [".antlr"]
 
 [tool.black]
