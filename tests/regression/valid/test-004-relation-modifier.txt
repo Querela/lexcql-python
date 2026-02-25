@@ -1,0 +1,5 @@
+translation =/lang=deu "Hund"
+translation =/lang = deu Hund
+translation = / lang=deu "Hund"
+lemma =/lang=deu/ignoreCase "hund"
+lemma =/unmasked "^ca?r*"

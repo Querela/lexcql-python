@@ -1,0 +1,4 @@
+Banane
+"Apfel"
+'Birne'
+"auf der Mauer"

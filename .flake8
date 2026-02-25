@@ -1,0 +1,11 @@
+[flake8]
+max-line-length = 120
+exclude =
+    .git,
+    .venv,
+    dist,
+    __pycache__,
+    src/lexcql/LexParser.py,
+    src/lexcql/LexLexer.py,
+    src/lexcql/LexParserListener.py
+docstring-convention = google

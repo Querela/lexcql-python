@@ -1,0 +1,3 @@
+lemma =
+= Hund
+das Lemma = Hund

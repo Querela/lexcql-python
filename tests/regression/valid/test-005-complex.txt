@@ -1,0 +1,2 @@
+pos = "NOUN" NOT "lion" AND definition = carnivore
+pos = NOUN AND ( lemma = Apfel OR lemma = "Birne" )
