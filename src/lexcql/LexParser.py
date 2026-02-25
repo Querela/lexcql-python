@@ -148,6 +148,12 @@ class LexParser ( Parser ):
             if hasattr( listener, "exitQuery" ):
                 listener.exitQuery(self)
 
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitQuery" ):
+                return visitor.visitQuery(self)
+            else:
+                return visitor.visitChildren(self)
+
 
 
 
@@ -201,6 +207,12 @@ class LexParser ( Parser ):
         def exitRule(self, listener:ParseTreeListener):
             if hasattr( listener, "exitBoolean_query" ):
                 listener.exitBoolean_query(self)
+
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitBoolean_query" ):
+                return visitor.visitBoolean_query(self)
+            else:
+                return visitor.visitChildren(self)
 
 
 
@@ -266,6 +278,12 @@ class LexParser ( Parser ):
         def exitRule(self, listener:ParseTreeListener):
             if hasattr( listener, "exitSubquery" ):
                 listener.exitSubquery(self)
+
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitSubquery" ):
+                return visitor.visitSubquery(self)
+            else:
+                return visitor.visitChildren(self)
 
 
 
@@ -334,6 +352,12 @@ class LexParser ( Parser ):
             if hasattr( listener, "exitSearch_clause" ):
                 listener.exitSearch_clause(self)
 
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitSearch_clause" ):
+                return visitor.visitSearch_clause(self)
+            else:
+                return visitor.visitChildren(self)
+
 
 
 
@@ -388,6 +412,12 @@ class LexParser ( Parser ):
             if hasattr( listener, "exitSearch_term" ):
                 listener.exitSearch_term(self)
 
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitSearch_term" ):
+                return visitor.visitSearch_term(self)
+            else:
+                return visitor.visitChildren(self)
+
 
 
 
@@ -439,6 +469,12 @@ class LexParser ( Parser ):
         def exitRule(self, listener:ParseTreeListener):
             if hasattr( listener, "exitIndex" ):
                 listener.exitIndex(self)
+
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitIndex" ):
+                return visitor.visitIndex(self)
+            else:
+                return visitor.visitChildren(self)
 
 
 
@@ -499,6 +535,12 @@ class LexParser ( Parser ):
             if hasattr( listener, "exitRelation_modified" ):
                 listener.exitRelation_modified(self)
 
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitRelation_modified" ):
+                return visitor.visitRelation_modified(self)
+            else:
+                return visitor.visitChildren(self)
+
 
 
 
@@ -553,6 +595,12 @@ class LexParser ( Parser ):
         def exitRule(self, listener:ParseTreeListener):
             if hasattr( listener, "exitRelation" ):
                 listener.exitRelation(self)
+
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitRelation" ):
+                return visitor.visitRelation(self)
+            else:
+                return visitor.visitChildren(self)
 
 
 
@@ -612,6 +660,12 @@ class LexParser ( Parser ):
         def exitRule(self, listener:ParseTreeListener):
             if hasattr( listener, "exitRelation_name" ):
                 listener.exitRelation_name(self)
+
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitRelation_name" ):
+                return visitor.visitRelation_name(self)
+            else:
+                return visitor.visitChildren(self)
 
 
 
@@ -685,6 +739,12 @@ class LexParser ( Parser ):
             if hasattr( listener, "exitRelation_symbol" ):
                 listener.exitRelation_symbol(self)
 
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitRelation_symbol" ):
+                return visitor.visitRelation_symbol(self)
+            else:
+                return visitor.visitChildren(self)
+
 
 
 
@@ -736,6 +796,12 @@ class LexParser ( Parser ):
         def exitRule(self, listener:ParseTreeListener):
             if hasattr( listener, "exitBoolean_modified" ):
                 listener.exitBoolean_modified(self)
+
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitBoolean_modified" ):
+                return visitor.visitBoolean_modified(self)
+            else:
+                return visitor.visitChildren(self)
 
 
 
@@ -793,6 +859,12 @@ class LexParser ( Parser ):
             if hasattr( listener, "exitR_boolean" ):
                 listener.exitR_boolean(self)
 
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitR_boolean" ):
+                return visitor.visitR_boolean(self)
+            else:
+                return visitor.visitChildren(self)
+
 
 
 
@@ -843,6 +915,12 @@ class LexParser ( Parser ):
         def exitRule(self, listener:ParseTreeListener):
             if hasattr( listener, "exitModifier_list" ):
                 listener.exitModifier_list(self)
+
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitModifier_list" ):
+                return visitor.visitModifier_list(self)
+            else:
+                return visitor.visitChildren(self)
 
 
 
@@ -904,6 +982,12 @@ class LexParser ( Parser ):
             if hasattr( listener, "exitModifier" ):
                 listener.exitModifier(self)
 
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitModifier" ):
+                return visitor.visitModifier(self)
+            else:
+                return visitor.visitChildren(self)
+
 
 
 
@@ -957,6 +1041,12 @@ class LexParser ( Parser ):
             if hasattr( listener, "exitModifier_name" ):
                 listener.exitModifier_name(self)
 
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitModifier_name" ):
+                return visitor.visitModifier_name(self)
+            else:
+                return visitor.visitChildren(self)
+
 
 
 
@@ -1003,6 +1093,12 @@ class LexParser ( Parser ):
             if hasattr( listener, "exitModifier_relation" ):
                 listener.exitModifier_relation(self)
 
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitModifier_relation" ):
+                return visitor.visitModifier_relation(self)
+            else:
+                return visitor.visitChildren(self)
+
 
 
 
@@ -1048,6 +1144,12 @@ class LexParser ( Parser ):
         def exitRule(self, listener:ParseTreeListener):
             if hasattr( listener, "exitModifier_value" ):
                 listener.exitModifier_value(self)
+
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitModifier_value" ):
+                return visitor.visitModifier_value(self)
+            else:
+                return visitor.visitChildren(self)
 
 
 
@@ -1104,6 +1206,12 @@ class LexParser ( Parser ):
             if hasattr( listener, "exitPrefix_name" ):
                 listener.exitPrefix_name(self)
 
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitPrefix_name" ):
+                return visitor.visitPrefix_name(self)
+            else:
+                return visitor.visitChildren(self)
+
 
 
 
@@ -1150,6 +1258,12 @@ class LexParser ( Parser ):
             if hasattr( listener, "exitPrefix" ):
                 listener.exitPrefix(self)
 
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitPrefix" ):
+                return visitor.visitPrefix(self)
+            else:
+                return visitor.visitChildren(self)
+
 
 
 
@@ -1190,6 +1304,12 @@ class LexParser ( Parser ):
         def exitRule(self, listener:ParseTreeListener):
             if hasattr( listener, "exitSimple_name" ):
                 listener.exitSimple_name(self)
+
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitSimple_name" ):
+                return visitor.visitSimple_name(self)
+            else:
+                return visitor.visitChildren(self)
 
 
 

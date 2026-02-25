@@ -15,11 +15,11 @@ import antlr4.error.ErrorListener
 from antlr4 import CommonTokenStream
 from antlr4 import InputStream
 from antlr4 import ParserRuleContext
-from antlr4 import ParseTreeWalker
+from antlr4.tree.Tree import TerminalNodeImpl
 
 from lexcql.LexLexer import LexLexer
 from lexcql.LexParser import LexParser
-from lexcql.LexParserListener import LexParserListener
+from lexcql.LexParserVisitor import LexParserVisitor
 
 # ---------------------------------------------------------------------------
 
@@ -537,46 +537,43 @@ class ExpressionTreeBuilderException(Exception):
     """Error building expression tree."""
 
 
-class ExpressionTreeBuilder(LexParserListener):
+class ExpressionTreeBuilder(LexParserVisitor):
     def __init__(self, parser: "QueryParser") -> None:
         super().__init__()
         self.parser = parser
         self.stack: Deque[Any] = deque()
 
-        self.stack_Boolean_query: Deque[int] = deque()
-        """for `enterBoolean_query`/`exitBoolean_query`"""
         self.stack_Modifier_list: Deque[int] = deque()
         """for `enterModifier_list`/`exitModifier_list`"""
 
     # ----------------------------------------------------
 
-    def enterQuery(self, ctx):
+    def visitQuery(self, ctx):
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                "enterQuery: children=%s / cnt=%s / text=%s",
+                "visitQuery/enter: children=%s / cnt=%s / text=%s",
                 ctx.children,
                 ctx.getChildCount(),
                 ctx.getText(),
             )
-        return super().enterQuery(ctx)
 
-    def exitQuery(self, ctx):
-        LOGGER.debug("exitQuery: stack=%s", self.stack)
-        return super().exitQuery(ctx)
+        super().visitQuery(ctx)
 
-    def enterBoolean_query(self, ctx):
+        LOGGER.debug("visitQuery/exit: stack=%s", self.stack)
+        return None
+
+    def visitBoolean_query(self, ctx):
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                "visitBoolean_query: children=%s / cnt=%s / text=%s",
+                "visitBoolean_query/enter: children=%s / cnt=%s / text=%s",
                 ctx.children,
                 ctx.getChildCount(),
                 ctx.getText(),
             )
-        self.stack_Boolean_query.append(len(self.stack))
-        return super().enterBoolean_query(ctx)
 
-    def exitBoolean_query(self, ctx):
-        pos = self.stack_Boolean_query.pop()
+        pos = len(self.stack)
+
+        super().visitBoolean_query(ctx)
 
         if len(self.stack) > pos:
             if len(self.stack) - pos == 1:
@@ -599,28 +596,28 @@ class ExpressionTreeBuilder(LexParserListener):
 
                 if len(children) > 0:
                     raise ExpressionTreeBuilderException(
-                        "exitBoolean_query children length does not match into tree structure!"
+                        "visitBoolean_query children length does not match into tree structure!"
                     )
 
                 # "return" the tree
                 self.stack.append(node)
         else:
-            raise ExpressionTreeBuilderException("exitBoolean_query is empty")
+            raise ExpressionTreeBuilderException("visitBoolean_query is empty")
 
-        LOGGER.debug("exitBoolean_query: stack=%s", self.stack)
-        return super().exitBoolean_query(ctx)
+        LOGGER.debug("visitBoolean_query/exit: stack=%s", self.stack)
+        return None
 
-    def enterSubquery(self, ctx):
+    def visitSubquery(self, ctx):
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                "enterSubquery: children=%s / cnt=%s / text=%s",
+                "visitSubquery/enter: children=%s / cnt=%s / text=%s",
                 ctx.children,
                 ctx.getChildCount(),
                 ctx.getText(),
             )
-        return super().enterSubquery(ctx)
 
-    def exitSubquery(self, ctx):
+        super().visitSubquery(ctx)
+
         if ctx.boolean_query() is not None:
             node: QueryNode = self.stack.pop()
             sqNode = Subquery(node, inParentheses=True)
@@ -632,14 +629,13 @@ class ExpressionTreeBuilder(LexParserListener):
             searchClause: SearchClause = self.stack.pop()
             self.stack.append(searchClause)
 
-        LOGGER.debug("exitSubquery: stack=%s", self.stack)
-        return super().exitSubquery(ctx)
+        LOGGER.debug("visitSubquery/exit: stack=%s", self.stack)
+        return None
 
-    # TODO: check
-    def enterBoolean_modified(self, ctx):
+    def visitBoolean_modified(self, ctx):
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                "enterBoolean_modified: children=%s / cnt=%s / text=%s",
+                "visitBoolean_modified/enter: children=%s / cnt=%s / text=%s",
                 ctx.children,
                 ctx.getChildCount(),
                 ctx.getText(),
@@ -660,23 +656,20 @@ class ExpressionTreeBuilder(LexParserListener):
                 f"boolean_modified does not support modifiers on booleans in LexCQL: {ctx.modifier_list().getText()}"
             )
 
-        return super().enterBoolean_modified(ctx)
+        LOGGER.debug("visitBoolean_modified/exit: stack=%s", self.stack)
+        return None
 
-    def exitBoolean_modified(self, ctx):
-        LOGGER.debug("exitBoolean_modified: stack=%s", self.stack)
-        return super().exitBoolean_modified(ctx)
-
-    def enterSearch_clause(self, ctx):
+    def visitSearch_clause(self, ctx):
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                "enterSearch_clause: children=%s / cnt=%s / text=%s",
+                "visitSearch_clause/enter: children=%s / cnt=%s / text=%s",
                 ctx.children,
                 ctx.getChildCount(),
                 ctx.getText(),
             )
-        return super().enterSearch_clause(ctx)
 
-    def exitSearch_clause(self, ctx):
+        super().visitSearch_clause(ctx)
+
         searchTerm: str = self.stack.pop()
         relation: Optional[Relation] = None
         index: Optional[str] = None
@@ -689,85 +682,83 @@ class ExpressionTreeBuilder(LexParserListener):
             node.location = SourceLocation.fromContext(ctx)
         self.stack.append(node)
 
-        LOGGER.debug("exitSearch_clause: stack=%s", self.stack)
-        return super().exitSearch_clause(ctx)
+        LOGGER.debug("visitSearch_clause/exit: stack=%s", self.stack)
+        return None
 
-    # TODO: check
-    def enterSearch_term(self, ctx):
+    def visitSearch_term(self, ctx):
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                "enterSearch_term: children=%s / cnt=%s / text=%s",
+                "visitSearch_term/enter: children=%s / cnt=%s / text=%s",
                 ctx.children,
                 ctx.getChildCount(),
                 ctx.getText(),
             )
 
-        # TODO: this is not nice (typing wise)
         searchTerm: str
         if ctx.SIMPLE_STRING() is not None:
-            searchTerm = ctx.SIMPLE_STRING().symbol.text
+            tn: TerminalNodeImpl = ctx.SIMPLE_STRING()
+            assert isinstance(tn, TerminalNodeImpl), "visitSearch_term ctx.SIMPLE_STRING() must be TerminalNodeImpl"
+            searchTerm = tn.getSymbol().text
         elif ctx.QUOTED_STRING() is not None:
-            searchTerm = self.unquoteString(ctx.QUOTED_STRING().symbol.text)
+            tn: TerminalNodeImpl = ctx.QUOTED_STRING()
+            assert isinstance(tn, TerminalNodeImpl), "visitSearch_term ctx.QUOTED_STRING() must be TerminalNodeImpl"
+            searchTerm = tn.getSymbol().text
+            searchTerm = self.unquoteString(searchTerm)
         else:
             raise ExpressionTreeBuilderException("Invalid state in visitSearch_term! No string?")
 
         self.stack.append(searchTerm)
 
-        return super().enterSearch_term(ctx)
+        LOGGER.debug("visitSearch_term/exit: stack=%s", self.stack)
+        return None
 
-    def exitSearch_term(self, ctx):
-        LOGGER.debug("exitSearch_term: stack=%s", self.stack)
-        return super().exitSearch_term(ctx)
-
-    def enterIndex(self, ctx):
+    def visitIndex(self, ctx):
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                "enterIndex: children=%s / cnt=%s / text=%s",
+                "visitIndex/enter: children=%s / cnt=%s / text=%s",
                 ctx.children,
                 ctx.getChildCount(),
                 ctx.getText(),
             )
 
-        # TODO: not nice! (typing)
-        name: str = ctx.getChild(0).getText()
+        child = ctx.getChild(0)
+        assert hasattr(child, "getText"), "ctx.getChild(0) must have getText() method"
+        name: str = child.getText()
         self.stack.append(name)
 
-        return super().enterIndex(ctx)
+        LOGGER.debug("visitIndex/exit: stack=%s", self.stack)
+        return None
 
-    def exitIndex(self, ctx):
-        LOGGER.debug("exitIndex: stack=%s", self.stack)
-        return super().exitIndex(ctx)
-
-    def enterRelation_modified(self, ctx):
+    def visitRelation_modified(self, ctx):
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                "enterRelation_modified: children=%s / cnt=%s / text=%s",
+                "visitRelation_modified/enter: children=%s / cnt=%s / text=%s",
                 ctx.children,
                 ctx.getChildCount(),
                 ctx.getText(),
             )
-        return super().enterRelation_modified(ctx)
 
-    def exitRelation_modified(self, ctx):
+        super().visitRelation_modified(ctx)
+
         m_ctx = ctx.modifier_list()
         modifiers: List[Modifier] = []
         if m_ctx is not None:
-            modifiers = self.stack.pop()
+            modifiers: List[Modifier] = self.stack.pop()
 
-        name = self.stack.pop()
+        name: str = self.stack.pop()
 
         node = Relation(name, modifiers)
         if self.parser.enableSourceLocations:
             node.location = SourceLocation.fromContext(ctx)
         self.stack.append(node)
 
-        LOGGER.debug("exitRelation_modified: stack=%s", self.stack)
-        return super().exitRelation_modified(ctx)
+        LOGGER.debug("visitRelation_modified/exit: stack=%s", self.stack)
+        return None
 
-    def enterRelation(self, ctx):
+    def visitRelation(self, ctx):
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                "enterRelation: children=%s / cnt=%s / text=%s",
+                "visitRelation/enter: children=%s / cnt=%s / text=%s",
                 ctx.children,
                 ctx.getChildCount(),
                 ctx.getText(),
@@ -777,25 +768,21 @@ class ExpressionTreeBuilder(LexParserListener):
         relation = ctx.getText()
         self.stack.append(relation)
 
-        return super().enterRelation(ctx)
+        LOGGER.debug("visitRelation/exit: stack=%s", self.stack)
+        return None
 
-    def exitRelation(self, ctx):
-        LOGGER.debug("exitRelation: stack=%s", self.stack)
-        return super().exitRelation(ctx)
-
-    def enterModifier_list(self, ctx):
+    def visitModifier_list(self, ctx):
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                "enterModifier_list: children=%s / cnt=%s / text=%s",
+                "visitModifier_list/enter: children=%s / cnt=%s / text=%s",
                 ctx.children,
                 ctx.getChildCount(),
                 ctx.getText(),
             )
-        self.stack_Modifier_list.append(len(self.stack))
-        return super().enterModifier_list(ctx)
 
-    def exitModifier_list(self, ctx):
-        pos = self.stack_Modifier_list.pop()
+        pos = len(self.stack)
+
+        super().visitModifier_list(ctx)
 
         if len(self.stack) > pos:
             modifiers: List[Modifier] = []
@@ -805,37 +792,41 @@ class ExpressionTreeBuilder(LexParserListener):
         else:
             raise ExpressionTreeBuilderException("visitModifier_list is empty!")
 
-        LOGGER.debug("exitModifier_list: stack=%s", self.stack)
-        return super().exitModifier_list(ctx)
+        LOGGER.debug("visitModifier_list/exit: stack=%s", self.stack)
+        return None
 
-    def enterModifier(self, ctx):
+    def visitModifier(self, ctx):
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                "enterModifier: children=%s / cnt=%s / text=%s",
+                "visitModifier/enter: children=%s / cnt=%s / text=%s",
                 ctx.children,
                 ctx.getChildCount(),
                 ctx.getText(),
             )
 
-        name: str = ctx.modifier_name().simple_name().SIMPLE_STRING().symbol.text
+        tn: TerminalNodeImpl = ctx.modifier_name().simple_name().SIMPLE_STRING()
+        assert isinstance(
+            tn, TerminalNodeImpl
+        ), "visitModifier ctx.modifier_name().simple_name().SIMPLE_STRING() must be TerminalNodeImpl"
+        name: str = tn.getSymbol().text
         relation: Optional[str] = None
         value: Optional[str] = None
 
         r_ctx = ctx.modifier_relation()
         if r_ctx is not None:
             relation = r_ctx.relation_symbol().getText()
-            value = r_ctx.modifier_value().SIMPLE_STRING().symbol.text
+            tn: TerminalNodeImpl = r_ctx.modifier_value().SIMPLE_STRING()
+            assert isinstance(
+                tn, TerminalNodeImpl
+            ), "visitModifier r_ctx.modifier_value().SIMPLE_STRING() must be TerminalNodeImpl"
+            value = tn.getSymbol().text
 
         node = Modifier(name, relation, value)
         if self.parser.enableSourceLocations:
             node.location = SourceLocation.fromContext(ctx)
         self.stack.append(node)
 
-        return super().enterModifier(ctx)
-
-    def exitModifier(self, ctx):
-        LOGGER.debug("exitModifier: stack=%s", self.stack)
-        return super().exitModifier(ctx)
+        LOGGER.debug("visitModifier/exit: stack=%s", self.stack)
 
     # ----------------------------------------------------
 
@@ -921,9 +912,9 @@ class QueryParser:
 
                 # now build the expression tree
                 builder = ExpressionTreeBuilder(self)
-                walker = ParseTreeWalker()
-                walker.walk(builder, tree)
-                return builder.stack.pop()
+                builder.visit(tree)
+                node: QueryNode = builder.stack.pop()
+                return node
             else:
                 if LOGGER.isEnabledFor(logging.DEBUG):
                     for msg in error_listener.errors:

@@ -7,5 +7,6 @@ exclude =
     __pycache__,
     src/lexcql/LexParser.py,
     src/lexcql/LexLexer.py,
-    src/lexcql/LexParserListener.py
+    src/lexcql/LexParserListener.py,
+    src/lexcql/LexParserVisitor.py
 docstring-convention = google

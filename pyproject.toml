@@ -1,6 +1,6 @@
 [project]
 name = "lexcql-parser"
-version = "1.0.0"
+version = "1.1.0"
 description = "LexCQL Query Grammar and Parser"
 readme = "README.md"
 license = "MIT"
@@ -68,7 +68,7 @@ source-exclude = [".antlr"]
 line-length = 120
 extend-exclude = '''
 (
-  (Lex(Lexer|Parser(Listener)?)).py
+  (Lex(Lexer|Parser(Listener|Visitor)?)).py
 )
 '''
 
@@ -84,5 +84,6 @@ skip = [
     "src/lexcql/LexParser.py",
     "src/lexcql/LexLexer.py",
     "src/lexcql/LexParserListener.py",
+    "src/lexcql/LexParserVisitor.py",
 ]
 skip_gitignore = true

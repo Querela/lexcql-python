@@ -2,9 +2,10 @@ from antlr4 import CommonTokenStream
 from antlr4 import InputStream
 from antlr4.error.ErrorListener import ErrorListener
 
-from lexcql.parser import LexLexer
-from lexcql.parser import LexParser
-from lexcql.parser import LexParserListener  # noqa: F401
+from lexcql.LexLexer import LexLexer
+from lexcql.LexParser import LexParser
+from lexcql.LexParserListener import LexParserListener  # noqa: F401
+from lexcql.LexParserVisitor import LexParserVisitor  # noqa: F401
 from lexcql.parser import QueryNode
 from lexcql.parser import QueryParser
 from lexcql.parser import QueryParserException  # noqa: F401

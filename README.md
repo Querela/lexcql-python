@@ -82,7 +82,7 @@ uv sync --extra antlr
 source .venv/bin/activate
 
 cd src/lexcql
-uv run antlr4 -Dlanguage=Python3 *.g4
+uv run antlr4 -Dlanguage=Python3 *.g4 -listener -visitor
 ```
 
 Run style checks:
