@@ -32,6 +32,18 @@ class ExceptionThrowingErrorListener(ErrorListener):
 
 
 def antlr_parse(input: str) -> LexParser.QueryContext:
+    """Run the low-level ANTLR4 tokenization and parsing. This returns the parsing
+    context ANTLR4 uses instead of the simplified LexCQL query node types.
+
+    Args:
+        input: raw query string
+
+    Returns:
+        LexParser.QueryContext: the ANTLR4 root parsing context (query)
+
+    Throws:
+        SyntaxError: if an error occurred while parsing
+    """
     input_stream = InputStream(input)
     lexer = LexLexer(input_stream)
     stream = CommonTokenStream(lexer)
@@ -78,12 +90,17 @@ def can_parse(input: str):
         return False
 
 
+# ---------------------------------------------------------------------------
+
+
 @overload
 def validate(
     input: str,
     *,
     version: str = DEFAULT_VALIDATOR_SPECIFICATION_VERSION,
     return_errors: Literal[False] = False,
+    case_insensitive: bool = True,
+    warnings_as_errors: bool = False,
 ) -> bool: ...
 
 
@@ -93,6 +110,8 @@ def validate(
     *,
     version: str = DEFAULT_VALIDATOR_SPECIFICATION_VERSION,
     return_errors: Literal[True] = True,
+    case_insensitive: bool = True,
+    warnings_as_errors: bool = False,
 ) -> List[ErrorDetail]: ...
 
 
@@ -101,7 +120,30 @@ def validate(
     *,
     version: str = DEFAULT_VALIDATOR_SPECIFICATION_VERSION,
     return_errors: bool = False,
+    case_insensitive: bool = True,
+    warnings_as_errors: bool = False,
 ):
+    """Validate input query string by trying to parse it and if successful run a LexCQL
+    specification validation. Collect errors/warnings.
+
+    Args:
+        input: the raw query input string
+        version: the specification version to validate against.
+                 Defaults to DEFAULT_VALIDATOR_SPECIFICATION_VERSION ("0.3").
+        return_errors: whether to return simply a boolean if valid or a list of errors.
+                       Defaults to False.
+        case_insensitive: how to handle keywords/indexes in LexCQL. Defaults to True.
+        warnings_as_errors: handle warnings as errors. Defaults to False.
+
+    Raises:
+        ValueError: raised if ``version`` argument specifies an unknown LexCQL specification
+                    or no ``Validator`` can be found for this version.
+
+    Returns:
+        bool: if ``return_errors`` is ``False`` only return a boolean.
+              Returns ``True`` if parsing and validation is without issues, ``False`` otherwise.
+        List[ErrorDetail]: if ``return_errors`` is ``True`` return a list of errors AND warnings.
+    """
     # "check" params
     validator_cls = VALIDATORS.get(version, None)
     if validator_cls is None:
@@ -109,7 +151,12 @@ def validate(
 
     # create parser/validator
     parser = QueryParser(enableSourceLocations=True)
-    validator = validator_cls(query=input, raise_at_first_violation=not return_errors)
+    validator = validator_cls(
+        query=input,
+        case_insensitive=case_insensitive,
+        raise_at_first_violation=not return_errors,
+        warnings_as_errors=warnings_as_errors,
+    )
 
     # try to parse the input query string
     try:
@@ -128,14 +175,15 @@ def validate(
     try:
         validator.validate(qn)
     except SpecificationValidationError:
+        # not will raise if raise_at_first_violation enabled
         return False
 
-    if validator.errors:
-        if not return_errors:
-            return False
-        return list(validator.errors)
+    errors = list()
+    errors.extend(validator.errors)
+    if warnings_as_errors:
+        errors.extend(validator.warnings)
 
-    return [] if return_errors else True
+    return errors if return_errors else not bool(errors)
 
 
 # ---------------------------------------------------------------------------

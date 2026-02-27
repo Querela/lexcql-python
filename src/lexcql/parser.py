@@ -32,7 +32,9 @@ from lexcql.LexParserVisitor import LexParserVisitor
 LOGGER = logging.getLogger(__name__)
 
 _T = TypeVar("_T", bound="QueryNode")
+"""Type of ``QueryNode``."""
 _R = TypeVar("_R")
+"""Result type for ``QueryVisitor``."""
 
 # ---------------------------------------------------------------------------
 
@@ -640,10 +642,17 @@ class Subquery(QueryNode):
 
 @dataclass(frozen=True)
 class ErrorDetail:
+    """Wrapper for error or warnings messages to include the type of issue
+    with optional position and query string fragment."""
+
     message: str
-    type: Optional[Union[Literal["syntax-error", "validation-error"], str]] = None
+    """the error or warning message"""
+    type: Optional[Union[Literal["syntax-error", "validation-error", "validation-warning"], str]] = None
+    """the type of error or warning"""
     position: Optional[Union[int, SourceLocation]] = None
+    """optional position information in the raw query string"""
     fragment: Optional[str] = None
+    """optional query string fragment, may be a substring to quickly locate the issue"""
 
 
 class ErrorListener(antlr4.error.ErrorListener.ErrorListener):

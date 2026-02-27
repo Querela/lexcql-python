@@ -101,6 +101,7 @@ assert error.message == "Unknown index 'post'!"
 assert error.fragment == "post = NOUN"
 assert error.position.start == 0
 assert error.position.stop == 11
+assert error.type == "validation-error"
 ```
 
 ## Development
