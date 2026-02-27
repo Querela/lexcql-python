@@ -8,6 +8,7 @@ from typing import Any
 from typing import Deque
 from typing import Generic
 from typing import List
+from typing import Literal
 from typing import Optional
 from typing import Type
 from typing import TypeVar
@@ -637,9 +638,10 @@ class Subquery(QueryNode):
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True)
 class ErrorDetail:
     message: str
+    type: Optional[Union[Literal["syntax-error", "validation-error"], str]] = None
     position: Optional[Union[int, SourceLocation]] = None
     fragment: Optional[str] = None
 
@@ -681,6 +683,7 @@ class ErrorListener(antlr4.error.ErrorListener.ErrorListener):
         self.errors.append(
             ErrorDetail(
                 message=msg,
+                type="syntax-error",
                 position=SourceLocation.fromToken(offendingSymbol) if isinstance(offendingSymbol, Token) else pos,
                 fragment=fragment,
             )

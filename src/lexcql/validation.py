@@ -1,5 +1,7 @@
+from abc import ABCMeta
 from collections import deque
 from typing import Deque
+from typing import Dict
 from typing import List
 from typing import Optional
 
@@ -23,10 +25,125 @@ class SpecificationValidationError(Exception):
 # TODO: create custom error classes for each error type? or add some type id?
 
 
+class Validator(QueryVisitorAdapter[None], metaclass=ABCMeta):
+    """An abstract base Validator for LexCQL queries.
+
+    Subclasses should override the ``visit_`` QueryNode methods to
+    implement the validation logic and use the ``.validation_error()``
+    to raise/track validation errors.
+    """
+
+    def __init__(
+        self,
+        *,
+        query: Optional[str] = None,
+        case_insensitive: bool = True,
+        raise_at_first_violation: bool = True,
+    ):
+        """Creates a LexCQL Validator that checks that only known indexes are used
+        and that relations and relation modifiers are valid.
+
+        Args:
+            query: the original query string used for constructing the query node tree.
+                   Used to provide more context for validation errors. Defaults to None.
+            case_insensitive: Whether indexes (field names) are check case-insensitively.
+                              Defaults to True.
+            raise_at_first_violation: Raise a ``SpecificationValidationError`` at first
+                                      conformance validation or try to gather as many infos
+                                      as possible. Will be available in ``.errors`` attribute.
+                                      Defaults to True.
+        """
+        super().__init__()
+
+        self.query = query
+        """query string to add context to error messages for better error locations"""
+
+        self.case_insensitive = case_insensitive
+        """Whether index/field name matching happens case-(in)sensitively"""
+
+        self.raise_at_first_violation = raise_at_first_violation
+        """Whether to raise at first violation."""
+        self.errors: List[ErrorDetail] = list()
+        """List of specification validation errors if ``.raise_at_first_violation`` is ``False``"""
+
+    def validate(self, node: QueryNode, *, query: Optional[str] = None):
+        """Validate parse query node tree.
+
+        Args:
+            node: the parsed query node (root of parse tree)
+            query: the raw query input string. Will be used to add more context
+                   to error messages by adding the fragment where the error was
+                   caused. Defaults to None.
+
+        Returns:
+            bool: ``True`` if query in valid, ``False`` if any error was recorded
+                  in the ``.errors`` attribute
+        """
+        # allows to override the query string here
+        if query is not None:
+            self.query = query
+
+        # reset list of errors
+        self.errors = []
+
+        self.visit(node)
+
+        return len(self.errors) == 0
+
+    def is_valid(self, node: QueryNode, *, query: Optional[str] = None) -> bool:
+        """Convenience method that simply calls ``.validate()`` and returns
+        ``True`` if the query was valid.
+
+        Args:
+            node: the parsed query node (root of parse tree)
+            query: the raw query input string. Will be used to add more context
+                   to error messages by adding the fragment where the error was
+                   caused. Defaults to None.
+
+        Returns:
+            bool: ``True`` if query in valid, ``False`` otherwise
+
+        Note:
+            The ``.errors`` attribute will not be used here as the first validation
+            error will abort the validation process.
+        """
+        try:
+            return self.validate(node, query=query)
+        except SpecificationValidationError:
+            return False
+
+    def validation_error(self, node: QueryNode, error: str):
+        """(Internal) Raises or tracks a new validation  error.
+
+        Args:
+            node: the query node where the validation error was caused
+            error: the error message
+
+        Raises:
+            SpecificationValidationError: the raised error if ``.raise_at_first_violation``
+                                          is set to ``True``
+        """
+        fragment = None
+        if self.query and node.location:
+            fragment = self.query[node.location.start : node.location.stop]  # noqa: E203
+
+        if self.raise_at_first_violation:
+            raise SpecificationValidationError(error, node, fragment)
+
+        self.errors.append(
+            ErrorDetail(
+                message=error,
+                type="validation-error",
+                position=node.location,
+                fragment=fragment,
+            )
+        )
+
+
 # ---------------------------------------------------------------------------
 
 
-class LexCQLValidatorV0_3(QueryVisitorAdapter[None]):
+class LexCQLValidatorV0_3(Validator):
     """LexCQL Query Validator for LexCQL Spec v0.3."""
 
     SPECIFICATION_VERSION = "0.3"
@@ -101,19 +218,18 @@ class LexCQLValidatorV0_3(QueryVisitorAdapter[None]):
                                       as possible. Will be available in ``.errors`` attribute.
                                       Defaults to True.
         """
-        super().__init__()
+
+        super().__init__(
+            query=query,
+            case_insensitive=case_insensitive,
+            raise_at_first_violation=raise_at_first_violation,
+        )
 
         self.stack: Deque[QueryNode] = deque()
         """(internal) Query node stack to keep track of parents."""
 
-        self.query = query
-        """query string to add context to error messages for better error locations"""
-
         self.allowed_indexes = allowed_indexes
         """User-defined list of known indexes (LexCQL field names)"""
-
-        self.case_insensitive = case_insensitive
-        """Whether index/field name matching happens case-(in)sensitively"""
 
         if self.case_insensitive:
             # NOTE: overrides on instance (not on class level)
@@ -122,37 +238,6 @@ class LexCQLValidatorV0_3(QueryVisitorAdapter[None]):
 
             if self.allowed_indexes:
                 self.allowed_indexes = list(map(str.lower, self.allowed_indexes))
-
-        self.raise_at_first_violation = raise_at_first_violation
-        """Whether to raise at first violation."""
-        self.errors: List[ErrorDetail] = list()
-        """List of specification validation errors if ``.raise_at_first_violation`` is ``False``"""
-
-    def validate(self, node: QueryNode, *, query: Optional[str] = None):
-        # allows to override the query string here
-        if query is not None:
-            self.query = query
-
-        # reset list of errors
-        self.errors = []
-
-        self.visit(node)
-
-    def is_valid(self, node: QueryNode, *, query: Optional[str] = None) -> bool:
-        try:
-            self.validate(node, query=query)
-            return True
-        except SpecificationValidationError:
-            return False
-
-    def _validation_error(self, node: QueryNode, error: str):
-        fragment = None
-        if self.query and node.location:
-            fragment = self.query[node.location.start : node.location.stop]  # noqa: E203
-
-        if self.raise_at_first_violation:
-            raise SpecificationValidationError(error, node, fragment)
-        self.errors.append(ErrorDetail(error, node.location, fragment=fragment))
 
     # ----------------------------------------------------
 
@@ -163,12 +248,12 @@ class LexCQLValidatorV0_3(QueryVisitorAdapter[None]):
                 index = index.lower()
             if self.allowed_indexes:
                 if index not in self.allowed_indexes:
-                    self._validation_error(
+                    self.validation_error(
                         node, f"Unknown index '{node.index}' (only allowed: {self.allowed_indexes!r})!"
                     )
             else:
                 if index not in self.KNOWN_INDEXES:
-                    self._validation_error(node, f"Unknown index '{node.index}'!")
+                    self.validation_error(node, f"Unknown index '{node.index}'!")
 
         # TODO: check `search_term` against relations/modifiers? (regex/masked)
 
@@ -184,10 +269,10 @@ class LexCQLValidatorV0_3(QueryVisitorAdapter[None]):
             if self.case_insensitive:
                 relation = relation.lower()
             if relation not in self.KNOWN_RELATIONS:
-                self._validation_error(node, f"Relation '{node.relation}' is unspecified!")
+                self.validation_error(node, f"Relation '{node.relation}' is unspecified!")
 
             if relation == "is" and node.modifiers:
-                self._validation_error(node, f"Relation '{node.relation}' does not support any modifiers!")
+                self.validation_error(node, f"Relation '{node.relation}' does not support any modifiers!")
 
             # TODO: check modifiers that ignore/respect do not appear together
             # TODO: masked/unmasked/regex should not appear together
@@ -204,17 +289,28 @@ class LexCQLValidatorV0_3(QueryVisitorAdapter[None]):
             name = name.lower()
 
         if name not in self.KNOWN_MODIFIERS:
-            self._validation_error(node, f"Modifier '{node.name}' is unspecified!")
+            self.validation_error(node, f"Modifier '{node.name}' is unspecified!")
 
         # check against parent? --> visit_Relation "is" check
 
         relation = node.relation
         if relation and name != "lang":
-            self._validation_error(node, f"Modifier '{node.name}' does not support any extra relation!")
+            self.validation_error(node, f"Modifier '{node.name}' does not support any extra relation!")
 
         if relation and name == "lang":
             # TODO: do a valid language code check
             pass
 
+
+# ---------------------------------------------------------------------------
+
+VALIDATORS: Dict[str, Validator] = {
+    LexCQLValidatorV0_3.SPECIFICATION_VERSION: LexCQLValidatorV0_3,
+}
+"""Mapping of all known LexCQL Validators. Uses the LexCQL specification
+version as the key and returns the ``Validator`` class for instantiating."""
+
+DEFAULT_VALIDATOR_SPECIFICATION_VERSION = LexCQLValidatorV0_3.SPECIFICATION_VERSION
+"""The default LexCQL specification version for query validation."""
 
 # ---------------------------------------------------------------------------

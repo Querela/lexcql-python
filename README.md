@@ -63,6 +63,46 @@ parser = LexParser(stream)
 tree: LexParser.QueryContext = parser.query()
 ```
 
+Parsed queries can also be checked against their specification conformance.
+
+```python
+from lexcql import QueryParser
+from lexcql.validation import LexCQLValidatorV0_3
+
+parser = QueryParser(enableSourceLocations=True)
+
+query = """Banane"""
+node = parser.parse(query)
+validator = LexCQLValidatorV0_3()
+validator.validate(node, query=query)
+len(validator.errors) == 0  # no errors
+
+# or to raise an error on first violation
+query = """post = NOUN"""
+node = parser.parse(query)
+validator = LexCQLValidatorV0_3(raise_at_first_violation=True)
+validator.validate(node, query=query)  # raises SpecificationValidationError
+```
+
+A convenience method is provded with `lexcql.validate(query: str)`:
+
+```python
+from lexcql import validate
+
+# simple boolean returns
+validate("lemma = apple")  # => True
+validate("lemmas = apple")  # => False ("lemmas" is unknown field name)
+validate("lemma =")  # => False (parse error, missing search term)
+
+# or with list of errors
+error = validate("post = NOUN", return_errors=True)[0]  # has one error
+assert error.message == "Unknown index 'post'!"
+# error is the full query
+assert error.fragment == "post = NOUN"
+assert error.position.start == 0
+assert error.position.stop == 11
+```
+
 ## Development
 
 Fetch (or update) grammar files:
@@ -103,6 +143,8 @@ Run tests:
 uv sync --extra test
 
 uv run pytest
+# to see output and run a specific test file
+uv run pytest -v -rP tests/validation/test_validation.py
 ```
 
 Run check before publishing:

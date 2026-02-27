@@ -1,3 +1,7 @@
+from typing import List
+from typing import Literal
+from typing import overload
+
 from antlr4 import CommonTokenStream
 from antlr4 import InputStream
 from antlr4.error.ErrorListener import ErrorListener
@@ -10,7 +14,9 @@ from lexcql.parser import ErrorDetail
 from lexcql.parser import QueryNode
 from lexcql.parser import QueryParser
 from lexcql.parser import QueryParserException  # noqa: F401
-from lexcql.validation import LexCQLValidatorV0_3
+from lexcql.parser import SourceLocation  # noqa: F401
+from lexcql.validation import DEFAULT_VALIDATOR_SPECIFICATION_VERSION
+from lexcql.validation import VALIDATORS
 from lexcql.validation import SpecificationValidationError
 
 # ---------------------------------------------------------------------------
@@ -72,10 +78,40 @@ def can_parse(input: str):
         return False
 
 
-def validate(input: str, *, return_errors: bool = False):
-    parser = QueryParser(enableSourceLocations=True)
-    validator = LexCQLValidatorV0_3(query=input, raise_at_first_violation=not return_errors)
+@overload
+def validate(
+    input: str,
+    *,
+    version: str = DEFAULT_VALIDATOR_SPECIFICATION_VERSION,
+    return_errors: Literal[False] = False,
+) -> bool: ...
 
+
+@overload
+def validate(
+    input: str,
+    *,
+    version: str = DEFAULT_VALIDATOR_SPECIFICATION_VERSION,
+    return_errors: Literal[True] = True,
+) -> List[ErrorDetail]: ...
+
+
+def validate(
+    input: str,
+    *,
+    version: str = DEFAULT_VALIDATOR_SPECIFICATION_VERSION,
+    return_errors: bool = False,
+):
+    # "check" params
+    validator_cls = VALIDATORS.get(version, None)
+    if validator_cls is None:
+        raise ValueError(f"No validator found for {version=}!")
+
+    # create parser/validator
+    parser = QueryParser(enableSourceLocations=True)
+    validator = validator_cls(query=input, raise_at_first_violation=not return_errors)
+
+    # try to parse the input query string
     try:
         qn = parser.parse(input)
     except QueryParserException as ex:
@@ -88,6 +124,7 @@ def validate(input: str, *, return_errors: bool = False):
         errors.extend(parser.errors)
         return errors
 
+    # if parsing successful, run validation
     try:
         validator.validate(qn)
     except SpecificationValidationError:
