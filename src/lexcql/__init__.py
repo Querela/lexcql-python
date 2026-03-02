@@ -56,7 +56,7 @@ def antlr_parse(input: str) -> LexParser.QueryContext:
 # ---------------------------------------------------------------------------
 
 
-def parse(input: str, enableSourceLocations: bool = True) -> QueryNode:
+def parse(input: str, *, enableSourceLocations: bool = True) -> QueryNode:
     """Simple wrapper to generate a `QueryParser` and to parse some
     input string into a `QueryNode`.
 
@@ -75,7 +75,7 @@ def parse(input: str, enableSourceLocations: bool = True) -> QueryNode:
 
 
 def can_parse(input: str):
-    """Simple wrapper to check if the input string can be sucsessfully parsed.
+    """Simple wrapper to check if the input string can be successfully parsed.
 
     Args:
         input: raw input query string
@@ -166,7 +166,7 @@ def validate(
             return False
 
         errors = []
-        if not str(ex) == "unable to parse query":
+        if not str(ex).startswith("unable to parse query: "):
             errors.append(ErrorDetail(str(ex)))
         errors.extend(parser.errors)
         return errors

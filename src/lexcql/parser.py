@@ -1,6 +1,5 @@
 import logging
 from abc import ABCMeta
-from abc import abstractmethod
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
@@ -107,7 +106,7 @@ class QueryVisitor(Generic[_R], metaclass=ABCMeta):
     # ----------------------------------------------------
     # same as antlr4.tree.Tree.ParseTreeVisitor
 
-    def visitChildren(self, node: "QueryNode") -> _R:
+    def visitChildren(self, node: "QueryNode") -> Optional[_R]:
         result = self.defaultResult()
         for i in range(node.child_count):
             if not self.shouldVisitNextChild(node, result):
@@ -121,12 +120,12 @@ class QueryVisitor(Generic[_R], metaclass=ABCMeta):
         return result
 
     def defaultResult(self) -> Optional[_R]:
-        return None
+        return None  # type: ignore
 
-    def aggregateResult(self, aggregate: _R, nextResult: _R) -> _R:
+    def aggregateResult(self, aggregate: Optional[_R], nextResult: Optional[_R]) -> Optional[_R]:
         return nextResult
 
-    def shouldVisitNextChild(self, node: "QueryNode", currentResult: _R) -> bool:
+    def shouldVisitNextChild(self, node: "QueryNode", currentResult: Optional[_R]) -> bool:
         return True
 
 
@@ -236,7 +235,7 @@ class SourceLocation:
         return f"{self.start}:{self.stop}"
 
 
-class QueryNode(metaclass=ABCMeta):
+class QueryNode(Generic[_R], metaclass=ABCMeta):
     """Base class for LexCQL expression tree nodes."""
 
     def __init__(
@@ -362,9 +361,8 @@ class QueryNode(metaclass=ABCMeta):
             strrepr += f"@{self.location.start}:{self.location.stop}"
         return strrepr
 
-    @abstractmethod
-    def accept(self, visitor: QueryVisitor) -> None:
-        pass
+    def accept(self, visitor: QueryVisitor) -> _R:
+        return visitor.visit(self)
 
 
 # ---------------------------------------------------------------------------
@@ -401,9 +399,6 @@ class Modifier(QueryNode):
         if self.location:
             parts.append(f"@{self.location.start}:{self.location.stop}")
         return "".join(parts)
-
-    def accept(self, visitor: QueryVisitor) -> None:
-        visitor.visit(self)
 
 
 class Relation(QueryNode):
@@ -444,9 +439,6 @@ class Relation(QueryNode):
         if self.location:
             parts.append(f"@{self.location.start}:{self.location.stop}")
         return "".join(parts)
-
-    def accept(self, visitor: QueryVisitor) -> None:
-        visitor.visit(self)
 
 
 class SearchClause(QueryNode):
@@ -499,9 +491,6 @@ class SearchClause(QueryNode):
         if self.location:
             parts.append(f"@{self.location.start}:{self.location.stop}")
         return "".join(parts)
-
-    def accept(self, visitor: QueryVisitor) -> None:
-        visitor.visit(self)
 
 
 class SearchClauseGroup(QueryNode):
@@ -581,9 +570,6 @@ class SearchClauseGroup(QueryNode):
             parts.append(f"@{self.location.start}:{self.location.stop}")
         return "".join(parts)
 
-    def accept(self, visitor: QueryVisitor) -> None:
-        visitor.visit(self)
-
 
 class Subquery(QueryNode):
     """A LexCQL expression tree search_clausse_group node."""
@@ -633,9 +619,6 @@ class Subquery(QueryNode):
             parts.append(f"@{self.location.start}:{self.location.stop}")
         return "".join(parts)
 
-    def accept(self, visitor: QueryVisitor) -> None:
-        visitor.visit(self)
-
 
 # ---------------------------------------------------------------------------
 
@@ -681,10 +664,12 @@ class ErrorListener(antlr4.error.ErrorListener.ErrorListener):
                 LOGGER.debug("query: %s", self.query)
                 LOGGER.debug("       %s^- %s", " " * pos, msg)
 
-            if isinstance(recognizer, LexParser):
-                LOGGER.debug("symbol: %s", recognizer.symbolicNames[offendingSymbol.type])
-                LOGGER.debug("literal: %s", recognizer.literalNames[offendingSymbol.type])
-                LOGGER.debug("token idx: %s", offendingSymbol.tokenIndex)
+            if isinstance(offendingSymbol, Token):
+                lit_name, sym_name = self._get_token_name(recognizer, offendingSymbol)
+                LOGGER.debug(
+                    f"symbol: literal={lit_name!r} symbol={sym_name!r} @token-idx={offendingSymbol.tokenIndex}"
+                )
+                LOGGER.debug(f"{recognizer=}")
 
         if pos is None:
             pos = column
@@ -697,6 +682,27 @@ class ErrorListener(antlr4.error.ErrorListener.ErrorListener):
                 fragment=fragment,
             )
         )
+
+    @staticmethod
+    def _get_token_name(recognizer: Recognizer, symbol: Optional[Token]):
+        if not symbol:
+            return (None, None)
+        if not isinstance(recognizer, (LexLexer, LexParser)):
+            return (None, None)
+        if not hasattr(recognizer, "literalNames"):
+            return (None, None)
+        if not hasattr(recognizer, "symbolicNames"):
+            return (None, None)
+
+        type = symbol.type
+        lit_name = sym_name = None
+
+        if type < len(recognizer.literalNames):
+            lit_name = recognizer.literalNames[type]
+        if type < len(recognizer.symbolicNames):
+            sym_name = recognizer.symbolicNames[type]
+
+        return (lit_name, sym_name)
 
     def has_errors(self) -> bool:
         return bool(self.errors)
@@ -1038,7 +1044,7 @@ class ExpressionTreeBuilder(LexParserVisitor):
 class QueryParser:
     """A LexCQL query parser that produces LexCQL expression trees."""
 
-    def __init__(self, enableSourceLocations: bool = False):
+    def __init__(self, *, enableSourceLocations: bool = False):
         """[Constructor]
 
         Args:
@@ -1093,7 +1099,8 @@ class QueryParser:
                     for msg in error_listener.errors:
                         LOGGER.debug("ERROR: %s", msg)
 
-                raise QueryParserException("unable to parse query")
+                first_message = error_listener.errors[0].message if error_listener.errors else "?"
+                raise QueryParserException(f"unable to parse query: {first_message}")
         except ExpressionTreeBuilderException as ex:
             raise QueryParserException(str(ex)) from ex
         except QueryParserException:

@@ -105,6 +105,7 @@ class Validator(QueryVisitorAdapter[_R], metaclass=ABCMeta):
 
         # reset list of errors
         self.errors = []
+        self.warnings = []
 
         self.visit(node)
 
@@ -205,31 +206,31 @@ class Validator(QueryVisitorAdapter[_R], metaclass=ABCMeta):
             return self.stack[-1]
         return None
 
-    def visit_Subquery(self, node: Subquery) -> _R:
+    def visit_Subquery(self, node: Subquery) -> Optional[_R]:
         self.stack.append(node)
         result = super().visit_Subquery(node)
         self.stack.pop()
         return result
 
-    def visit_SearchClauseGroup(self, node: SearchClauseGroup) -> _R:
+    def visit_SearchClauseGroup(self, node: SearchClauseGroup) -> Optional[_R]:
         self.stack.append(node)
         result = super().visit_SearchClauseGroup(node)
         self.stack.pop()
         return result
 
-    def visit_SearchClause(self, node: SearchClause) -> _R:
+    def visit_SearchClause(self, node: SearchClause) -> Optional[_R]:
         self.stack.append(node)
         result = super().visit_SearchClause(node)
         self.stack.pop()
         return result
 
-    def visit_Relation(self, node: Relation) -> _R:
+    def visit_Relation(self, node: Relation) -> Optional[_R]:
         self.stack.append(node)
         result = super().visit_Relation(node)
         self.stack.pop()
         return result
 
-    def visit_Modifier(self, node: Modifier) -> _R:
+    def visit_Modifier(self, node: Modifier) -> Optional[_R]:
         self.stack.append(node)
         result = super().visit_Modifier(node)
         self.stack.pop()

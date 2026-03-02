@@ -67,7 +67,7 @@ Parsed queries can also be checked against their specification conformance.
 
 ```python
 from lexcql import QueryParser
-from lexcql.validation import LexCQLValidatorV0_3
+from lexcql.validation import LexCQLValidatorV0_3, SpecificationValidationError
 
 parser = QueryParser(enableSourceLocations=True)
 
@@ -132,9 +132,9 @@ Run style checks:
 # setup environment
 uv sync --extra style
 
+uv run isort --check --diff .
 uv run black --check .
 uv run flake8 . --show-source --statistics
-uv run isort --check --diff .
 ```
 
 Run tests:
