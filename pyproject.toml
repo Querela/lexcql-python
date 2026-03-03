@@ -1,6 +1,6 @@
 [project]
 name = "lexcql-parser"
-version = "1.3.1"
+version = "1.3.2"
 description = "LexCQL Query Grammar and Parser"
 readme = "README.md"
 license = "MIT"

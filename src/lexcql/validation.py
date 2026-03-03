@@ -97,7 +97,7 @@ class Validator(QueryVisitorAdapter[_R], metaclass=ABCMeta):
 
         Returns:
             bool: ``True`` if query in valid, ``False`` if any error was recorded
-                  in the ``.errors`` attribute
+                  in the ``.errors`` attribute (or in ``.warnings`` if ``.warnings_as_errors``)
         """
         # allows to override the query string here
         if query is not None:
@@ -109,7 +109,11 @@ class Validator(QueryVisitorAdapter[_R], metaclass=ABCMeta):
 
         self.visit(node)
 
-        return len(self.errors) == 0
+        num_issues = len(self.errors)
+        if self.warnings_as_errors:
+            num_issues += len(self.warnings)
+
+        return num_issues == 0
 
     def is_valid(self, node: QueryNode, *, query: Optional[str] = None) -> bool:
         """Convenience method that simply calls ``.validate()`` and returns
