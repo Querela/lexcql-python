@@ -135,6 +135,8 @@ uv sync --extra style
 uv run isort --check --diff .
 uv run black --check .
 uv run flake8 . --show-source --statistics
+
+uv run mypy src
 ```
 
 Run tests:

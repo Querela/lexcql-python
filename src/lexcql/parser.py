@@ -94,12 +94,12 @@ class QueryVisitor(Generic[_R], metaclass=ABCMeta):
         if not node:
             return None
 
-        def noop(node: "QueryNode") -> Optional[_R]:
-            return self.defaultResult()
-
         # search for specific visit function based on node_type
         method_name = f"visit_{node.node_type}"
-        method = getattr(self, method_name, noop)
+        method = getattr(self, method_name, self.visitChildren)
+
+        if LOGGER.isEnabledFor(logging.DEBUG):
+            LOGGER.debug("visiting '%s()': %s", method.__name__, node)
 
         return method(node)
 
@@ -137,7 +137,7 @@ class QueryVisitorAdapter(QueryVisitor[_R]):
     Generic with regards to the return type of the visit operation.
     """
 
-    def visit_SearchClauseGroup(self, node: "SearchClauseGroup") -> _R:
+    def visit_SearchClauseGroup(self, node: "SearchClauseGroup") -> Optional[_R]:
         """Visit a *search_clause_group* query node.
 
         Args:
@@ -148,7 +148,7 @@ class QueryVisitorAdapter(QueryVisitor[_R]):
         """
         return self.visitChildren(node)
 
-    def visit_Subquery(self, node: "Subquery") -> _R:
+    def visit_Subquery(self, node: "Subquery") -> Optional[_R]:
         """Visit a *subquery* query node.
 
         Args:
@@ -159,7 +159,7 @@ class QueryVisitorAdapter(QueryVisitor[_R]):
         """
         return self.visitChildren(node)
 
-    def visit_SearchClause(self, node: "SearchClause") -> _R:
+    def visit_SearchClause(self, node: "SearchClause") -> Optional[_R]:
         """Visit a *search_clause* query node.
 
         Args:
@@ -170,7 +170,7 @@ class QueryVisitorAdapter(QueryVisitor[_R]):
         """
         return self.visitChildren(node)
 
-    def visit_Relation(self, node: "Relation") -> _R:
+    def visit_Relation(self, node: "Relation") -> Optional[_R]:
         """Visit a *relation* query node.
 
         Args:
@@ -181,7 +181,7 @@ class QueryVisitorAdapter(QueryVisitor[_R]):
         """
         return self.visitChildren(node)
 
-    def visit_Modifier(self, node: "Modifier") -> _R:
+    def visit_Modifier(self, node: "Modifier") -> Optional[_R]:
         """Visit a *modifier* query node.
 
         Args:
@@ -361,7 +361,7 @@ class QueryNode(Generic[_R], metaclass=ABCMeta):
             strrepr += f"@{self.location.start}:{self.location.stop}"
         return strrepr
 
-    def accept(self, visitor: QueryVisitor) -> _R:
+    def accept(self, visitor: QueryVisitor) -> Optional[_R]:
         return visitor.visit(self)
 
 
@@ -411,7 +411,7 @@ class Relation(QueryNode):
             relation: the relation name or symbol
             modifiers: the list of modifiers for this relation or ``None``
         """
-        super().__init__(QueryNodeType.RELATION, children=modifiers)
+        super().__init__(QueryNodeType.RELATION, children=modifiers)  # type: ignore
 
         self.relation = relation
         """the relation"""
@@ -422,7 +422,7 @@ class Relation(QueryNode):
         Returns:
             List[Modifier]: the modifiers
         """
-        return self.children
+        return self.children  # type: ignore
 
     @property
     def modifiers(self) -> List[Modifier]:
@@ -465,7 +465,7 @@ class SearchClause(QueryNode):
         Returns:
             Optional[Relation]: the relation or ``None``
         """
-        return self.get_child(0, Relation)
+        return self.get_child(0, Relation)  # type: ignore
 
     @property
     def relation(self) -> Optional[Relation]:
@@ -542,7 +542,7 @@ class SearchClauseGroup(QueryNode):
         return self.get_right_child()
 
     @property
-    def boolean(self) -> QueryNode:
+    def boolean(self) -> RBoolean:
         return self.get_boolean()
 
     def has_boolean(self, r_boolean: RBoolean) -> bool:
@@ -586,7 +586,7 @@ class Subquery(QueryNode):
         self.inParentheses = inParentheses
         """Is this query node in parentheses."""
 
-    def get_child(self) -> QueryNode:
+    def get_child(self) -> QueryNode:  # type: ignore
         """Get the inner child
 
         Returns:
@@ -754,18 +754,22 @@ class ExpressionTreeBuilder(LexParserVisitor):
         if len(self.stack) > pos:
             if len(self.stack) - pos == 1:
                 # TODO: noop?
-                node: QueryNode = self.stack.pop()
+                node = self.stack.pop()
+                assert isinstance(node, QueryNode), f"node must be a QueryNode, found {node=}"
                 self.stack.append(node)
             else:
-                children: List[QueryNode] = []
+                children: List[QueryNode | RBoolean] = []
                 while len(self.stack) > pos:
                     children.insert(0, self.stack.pop())
 
                 # build tree
-                node: QueryNode = children.pop(0)
+                node = children.pop(0)
+                assert isinstance(node, QueryNode), f"node must be a QueryNode, found {node=}"
                 while len(children) >= 2:
-                    rBoolean: RBoolean = children.pop(0)
-                    other: QueryNode = children.pop(0)
+                    rBoolean = children.pop(0)
+                    assert isinstance(rBoolean, RBoolean), f"node must be a RBoolean, found {rBoolean=}"
+                    other = children.pop(0)
+                    assert isinstance(other, QueryNode), f"node must be a QueryNode, found {other=}"
                     node = SearchClauseGroup(node, rBoolean, other)
                     if self.parser.enableSourceLocations:
                         node.location = SourceLocation.fromContext(ctx)
@@ -872,11 +876,11 @@ class ExpressionTreeBuilder(LexParserVisitor):
 
         searchTerm: str
         if ctx.SIMPLE_STRING() is not None:
-            tn: TerminalNodeImpl = ctx.SIMPLE_STRING()
+            tn = ctx.SIMPLE_STRING()
             assert isinstance(tn, TerminalNodeImpl), "visitSearch_term ctx.SIMPLE_STRING() must be TerminalNodeImpl"
             searchTerm = tn.getSymbol().text
         elif ctx.QUOTED_STRING() is not None:
-            tn: TerminalNodeImpl = ctx.QUOTED_STRING()
+            tn = ctx.QUOTED_STRING()
             assert isinstance(tn, TerminalNodeImpl), "visitSearch_term ctx.QUOTED_STRING() must be TerminalNodeImpl"
             searchTerm = tn.getSymbol().text
             searchTerm = self.unquoteString(searchTerm)
@@ -919,7 +923,7 @@ class ExpressionTreeBuilder(LexParserVisitor):
         m_ctx = ctx.modifier_list()
         modifiers: List[Modifier] = []
         if m_ctx is not None:
-            modifiers: List[Modifier] = self.stack.pop()
+            modifiers = self.stack.pop()
 
         name: str = self.stack.pop()
 
@@ -980,7 +984,7 @@ class ExpressionTreeBuilder(LexParserVisitor):
                 ctx.getText(),
             )
 
-        tn: TerminalNodeImpl = ctx.modifier_name().simple_name().SIMPLE_STRING()
+        tn = ctx.modifier_name().simple_name().SIMPLE_STRING()
         assert isinstance(
             tn, TerminalNodeImpl
         ), "visitModifier ctx.modifier_name().simple_name().SIMPLE_STRING() must be TerminalNodeImpl"
@@ -991,7 +995,7 @@ class ExpressionTreeBuilder(LexParserVisitor):
         r_ctx = ctx.modifier_relation()
         if r_ctx is not None:
             relation = r_ctx.relation_symbol().getText()
-            tn: TerminalNodeImpl = r_ctx.modifier_value().SIMPLE_STRING()
+            tn = r_ctx.modifier_value().SIMPLE_STRING()
             assert isinstance(
                 tn, TerminalNodeImpl
             ), "visitModifier r_ctx.modifier_value().SIMPLE_STRING() must be TerminalNodeImpl"

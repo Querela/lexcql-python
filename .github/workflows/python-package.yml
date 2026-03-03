@@ -35,8 +35,8 @@ jobs:
     - name: Lint with isort
       run: uv run isort --check --diff .
       
-    # - name: Check with mypy
-    #   run: uv run mypy src
+    - name: Check with mypy
+      run: uv run mypy src
 
     - name: Test with pytest
       run: uv run pytest
