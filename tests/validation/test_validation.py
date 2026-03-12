@@ -224,6 +224,20 @@ def test_validation_custom_index_v0_3(parser: QueryParser):
     assert is_valid is True
 
 
+def test_validation_warning_def_v0_3(parser: QueryParser):
+    query = """def = Banane"""
+    node = parser.parse(query)
+
+    validator = LexCQLValidatorV0_3(raise_at_first_violation=False, warnings_as_errors=False)
+    is_valid = validator.validate(node, query=query)
+    assert is_valid is True
+    assert len(validator.errors) == 0
+    assert len(validator.warnings) == 1
+    assert validator.warnings[0].message == """Usage of legacy definition index 'def'. Please update to 'definition'."""
+    assert validator.warnings[0].fragment == """def = Banane"""
+    assert validator.warnings[0].type == "validation-warning"
+
+
 def test_validation_warnings_v0_3(parser: QueryParser):
     query = "lemma = 'Banane'"
     node = parser.parse(query)

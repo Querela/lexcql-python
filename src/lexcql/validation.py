@@ -372,7 +372,12 @@ class LexCQLValidatorV0_3(Validator[None]):
                     )
             else:
                 if index not in self.KNOWN_INDEXES:
-                    self.validation_error(node, f"Unknown index '{node.index}'!")
+                    if index == "def":
+                        self.validation_warning(
+                            node, f"Usage of legacy definition index '{node.index}'. Please update to 'definition'."
+                        )
+                    else:
+                        self.validation_error(node, f"Unknown index '{node.index}'!")
 
         # TODO: check `search_term` against relations/modifiers? (regex/masked)
 
