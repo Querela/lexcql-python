@@ -444,7 +444,14 @@ class Relation(QueryNode):
 class SearchClause(QueryNode):
     """A LexCQL expression tree search_clause node."""
 
-    def __init__(self, index: Optional[str], relation: Optional[Relation], search_term: str):
+    def __init__(
+        self,
+        index: Optional[str],
+        relation: Optional[Relation],
+        search_term: str,
+        *,
+        search_term_quoted: Optional[bool] = None,
+    ):
         """[Constructor]
 
         Args:
@@ -458,6 +465,8 @@ class SearchClause(QueryNode):
         """the index (or field) or ``None``"""
         self.search_term = search_term
         """the search term"""
+        self.search_term_quoted = search_term_quoted
+        """whether the search term was quoted (if it was not strictly necessary), ``None`` if unknown"""
 
     def get_relation(self) -> Optional[Relation]:
         """Get the relation.
@@ -480,6 +489,9 @@ class SearchClause(QueryNode):
         """
         return self.index is not None and self.relation is not None
 
+    def was_quoted(self) -> Optional[bool]:
+        return self.search_term_quoted
+
     def __str__(self):
         parts = list()
         parts.append(f"({self.node_type!s} ")
@@ -487,7 +499,12 @@ class SearchClause(QueryNode):
             parts.append(f"{self.index} ")
         if self.relation is not None:
             parts.append(f"{self.relation!s} ")
-        parts.append(f"{self.search_term})")
+        parts.append(f"{self.search_term}")
+        if self.search_term_quoted is not None:
+            if self.search_term_quoted is True:
+                parts.append(f" [quoted]")
+            # TODO: else?
+        parts.append(")")
         if self.location:
             parts.append(f"@{self.location.start}:{self.location.stop}")
         return "".join(parts)
@@ -850,6 +867,7 @@ class ExpressionTreeBuilder(LexParserVisitor):
 
         super().visitSearch_clause(ctx)
 
+        searchTermQuoted: bool = self.stack.pop()
         searchTerm: str = self.stack.pop()
         relation: Optional[Relation] = None
         index: Optional[str] = None
@@ -857,7 +875,7 @@ class ExpressionTreeBuilder(LexParserVisitor):
             relation = self.stack.pop()
             index = self.stack.pop()
 
-        node = SearchClause(index, relation, searchTerm)
+        node = SearchClause(index, relation, searchTerm, search_term_quoted=searchTermQuoted)
         if self.parser.enableSourceLocations:
             node.location = SourceLocation.fromContext(ctx)
         self.stack.append(node)
@@ -875,6 +893,7 @@ class ExpressionTreeBuilder(LexParserVisitor):
             )
 
         searchTerm: str
+        searchTermQuoted: bool = False
         if ctx.SIMPLE_STRING() is not None:
             tn = ctx.SIMPLE_STRING()
             assert isinstance(tn, TerminalNodeImpl), "visitSearch_term ctx.SIMPLE_STRING() must be TerminalNodeImpl"
@@ -884,10 +903,12 @@ class ExpressionTreeBuilder(LexParserVisitor):
             assert isinstance(tn, TerminalNodeImpl), "visitSearch_term ctx.QUOTED_STRING() must be TerminalNodeImpl"
             searchTerm = tn.getSymbol().text
             searchTerm = self.unquoteString(searchTerm)
+            searchTermQuoted = True
         else:
             raise ExpressionTreeBuilderException("Invalid state in visitSearch_term! No string?")
 
         self.stack.append(searchTerm)
+        self.stack.append(searchTermQuoted)
 
         LOGGER.debug("visitSearch_term/exit: stack=%s", self.stack)
         return None
