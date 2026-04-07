@@ -502,7 +502,7 @@ class SearchClause(QueryNode):
         parts.append(f"{self.search_term}")
         if self.search_term_quoted is not None:
             if self.search_term_quoted is True:
-                parts.append(f" [quoted]")
+                parts.append(" [quoted]")
             # TODO: else?
         parts.append(")")
         if self.location:
@@ -603,17 +603,17 @@ class Subquery(QueryNode):
         self.inParentheses = inParentheses
         """Is this query node in parentheses."""
 
-    def get_child(self) -> QueryNode:  # type: ignore
+    def get_inner_child(self) -> QueryNode:
         """Get the inner child
 
         Returns:
-            QueryNode: the right child
+            QueryNode: the inner child
         """
         return self.children[0]
 
     @property
     def child(self) -> QueryNode:
-        return self.get_child()
+        return self.get_inner_child()
 
     def is_in_parentheses(self) -> bool:
         """Is this query node in parentheses.

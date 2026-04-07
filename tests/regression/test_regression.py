@@ -9,6 +9,7 @@ import pytest
 from lexcql.parser import QueryNode
 from lexcql.parser import QueryParser
 from lexcql.parser import QueryParserException  # noqa: F401
+from lexcql.parser import QueryVisitorAdapter
 
 # ---------------------------------------------------------------------------
 
@@ -57,6 +58,22 @@ def test_parser_by_valid_sample_query(parser: QueryParser, name: str, query: str
 def test_parser_by_invalid_sample_query(parser: QueryParser, name: str, query: str):
     with pytest.raises(QueryParserException) as exc:  # noqa: F841
         parser.parse(query)
+
+
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name,query", get_test_queries(folder=DN_VALID_CASES))
+def test_query_visitor_by_valid_sample_query(parser: QueryParser, name: str, query: str):
+    node = parser.parse(query)
+    assert node is not None
+    assert isinstance(node, QueryNode)
+
+    class DummyVisitor(QueryVisitorAdapter[None]):
+        pass
+
+    visitor = DummyVisitor()
+    visitor.visit(node)
 
 
 # ---------------------------------------------------------------------------
