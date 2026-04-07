@@ -1,0 +1,10 @@
+{
+    "recommendations": [
+        "ms-python.python",
+        "ms-python.black-formatter",
+        "ms-python.isort",
+        "ryanluker.vscode-coverage-gutters",
+        "njpwerner.autodocstring",
+        "mike-lischke.vscode-antlr4"
+    ]
+}

@@ -108,3 +108,25 @@ module = [
     "antlr4.error.ErrorListener",
 ]
 ignore_missing_imports = true
+
+[tool.pytest]
+minversion = "9.0"
+addopts = [
+    "-ra",
+    # "-vv",
+    "--strict-markers",
+    "--tb=short",
+    "--cov",
+    # "--cov-report=term-missing",
+    # for ryanluker/vscode-coverage-gutters
+    # "--cov-report", "xml:cov.xml",
+]
+
+[tool.coverage.run]
+omit = [
+    # skip auto-generated code (only enable to get insight of how much is used)
+    "src/lexcql/LexLexer.py",
+    "src/lexcql/LexParser.py",
+    "src/lexcql/LexParserListener.py",
+    "src/lexcql/LexParserVisitor.py",
+]
