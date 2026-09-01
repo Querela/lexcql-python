@@ -67,20 +67,20 @@ Parsed queries can also be checked against their specification conformance.
 
 ```python
 from lexcql import QueryParser
-from lexcql.validation import LexCQLValidatorV0_3, SpecificationValidationError
+from lexcql.validation import LexCQLValidatorV1_0, SpecificationValidationError
 
 parser = QueryParser(enableSourceLocations=True)
 
 query = """Banane"""
 node = parser.parse(query)
-validator = LexCQLValidatorV0_3()
+validator = LexCQLValidatorV1_0()
 validator.validate(node, query=query)
 len(validator.errors) == 0  # no errors
 
 # or to raise an error on first violation
 query = """post = NOUN"""
 node = parser.parse(query)
-validator = LexCQLValidatorV0_3(raise_at_first_violation=True)
+validator = LexCQLValidatorV1_0(raise_at_first_violation=True)
 validator.validate(node, query=query)  # raises SpecificationValidationError
 ```
 

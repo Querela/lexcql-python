@@ -41,7 +41,7 @@ def get_files(folder: str | os.PathLike | Path = DN_BASE):
 def get_test_queries(folder: str | os.PathLike | Path = DN_BASE):
     files = get_files(folder=folder)
     queries = map(load_content, files)
-    return chain.from_iterable([zip(repeat(file.name), queries) for file, queries in zip(files, queries)])
+    return list(chain.from_iterable([zip(repeat(file.name), queries) for file, queries in zip(files, queries)]))
 
 
 # ---------------------------------------------------------------------------

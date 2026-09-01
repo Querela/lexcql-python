@@ -45,6 +45,13 @@ def test_validate():
     assert validate("post == NOUN", version="0.3") is False
 
 
+def test_validate_v1_0():
+    # with specific version number
+    # 0.3 unknown field, 1.0 new field
+    assert validate("tense = Fut", version="0.3") is False
+    assert validate("tense = Fut", version="1.0") is True
+
+
 def test_validate_with_errors_list():
     # valid queries
     assert len(validate("Banane", return_errors=True)) == 0

@@ -129,7 +129,7 @@ def validate(
     Args:
         input: the raw query input string
         version: the specification version to validate against.
-                 Defaults to DEFAULT_VALIDATOR_SPECIFICATION_VERSION ("0.3").
+                 Defaults to DEFAULT_VALIDATOR_SPECIFICATION_VERSION ("1.0").
         return_errors: whether to return simply a boolean if valid or a list of errors.
                        Defaults to False.
         case_insensitive: how to handle keywords/indexes in LexCQL. Defaults to True.

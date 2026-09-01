@@ -66,8 +66,6 @@ class RBoolean(str, Enum):
     """logical 'and'"""
     OR = "OR"
     """logical 'or'"""
-    NOT = "NOT"
-    """logical 'and not'"""
 
 
 # ---------------------------------------------------------------------------
@@ -843,8 +841,7 @@ class ExpressionTreeBuilder(LexParserVisitor):
             self.stack.append(RBoolean.AND)
         elif b_ctx.OR() is not None:
             self.stack.append(RBoolean.OR)
-        elif b_ctx.NOT() is not None:
-            self.stack.append(RBoolean.NOT)
+        # NOTE: b_ctx.NOT() is now invalid
         else:
             raise ExpressionTreeBuilderException(f"invalid boolean for boolean_modified: {b_ctx.getText()}")
 

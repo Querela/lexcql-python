@@ -471,15 +471,240 @@ class LexCQLValidatorV0_3(Validator[None]):
         # TODO: check valid `node.value` for lang modifier?
 
 
+class LexCQLValidatorV1_0(Validator[None]):
+    """LexCQL Query Validator for LexCQL Spec v1.0."""
+
+    SPECIFICATION_VERSION = "1.0"
+    """LexCQL specification version"""
+
+    KNOWN_INDEXES = [
+        "any",
+        "lang",
+        "lemma",
+        "entryId",
+        "phonetic",
+        "translation",
+        "transcription",
+        "definition",
+        "etymology",
+        "case",
+        "degree",
+        "gender",
+        "mood",
+        "number",
+        "pos",
+        "tense",
+        "grammar",
+        "baseform",
+        "segmentation",
+        "sentiment",
+        "frequency",
+        "antonym",
+        "holonym",
+        "hypernym",
+        "hyponym",
+        "meronym",
+        "synonym",
+        "related",
+        "ref",
+        "senseRef",
+        "citation",
+    ]
+    """List of LexCQL indexes (LexCQL field names)"""
+    KNOWN_RELATIONS = ["=", "==", "<>", "is"]
+    """List of LexCQL relations"""
+    KNOWN_MODIFIERS = [
+        "lang",
+        "ignoreCase",
+        "respectCase",
+        "ignoreAccents",
+        "respectAccents",
+        "regexp",
+    ]
+    """List of LexCQL relation modifiers"""
+    MUTUALLY_EXCLUSIVE_MODIFIERS = [
+        {"ignoreCase", "respectCase"},
+        {"ignoreAccents", "respectAccents"},
+    ]
+    """List of mutually exclusive relation modifiers. They should not appear together."""
+
+    def __init__(
+        self,
+        *,
+        allowed_indexes: Optional[List[str]] = None,
+        allowed_modifiers: Optional[List[str]] = None,
+        query: Optional[str] = None,
+        case_insensitive: bool = True,
+        raise_at_first_violation: bool = True,
+        warnings_as_errors: bool = False,
+    ):
+        """Creates a LexCQL v0.3 Validator that checks that only known indexes are used
+        and that relations and relation modifiers are valid.
+
+        Args:
+            allowed_indexes: Override the default ``KNOWN_INDEXES`` list of LexCQL field names.
+                             Defaults to None.
+            allowed_modifiers: Override the default ``KNOWN_MODIFIERS`` list of LexCQL
+                               relation modifiers. Defaults to None.
+            query: the original query string used for constructing the query node tree.
+                   Used to provide more context for validation errors. Defaults to None.
+            case_insensitive: Whether indexes (field names) are check case-insensitively.
+                              Defaults to True.
+            raise_at_first_violation: Raise a ``SpecificationValidationError`` at first
+                                      conformance validation or try to gather as many infos
+                                      as possible. Will be available in ``.errors`` attribute.
+                                      Defaults to True.
+            warnings_as_errors: Handle warnings the same as errors. May raise ``SpecificationValidationError``.
+        """
+
+        super().__init__(
+            query=query,
+            case_insensitive=case_insensitive,
+            raise_at_first_violation=raise_at_first_violation,
+            warnings_as_errors=warnings_as_errors,
+        )
+
+        self.allowed_indexes = allowed_indexes
+        """User-defined list of known indexes (LexCQL field names)"""
+        self.allowed_modifiers = allowed_modifiers
+        """User-defined list of known modifiers (LexCQL relation modifiers)"""
+
+        if self.case_insensitive:
+            # NOTE: overrides on instance (not on class level)
+            self.KNOWN_INDEXES = list(map(str.lower, self.KNOWN_INDEXES))
+            self.KNOWN_RELATIONS = list(map(str.lower, self.KNOWN_RELATIONS))
+            self.KNOWN_MODIFIERS = list(map(str.lower, self.KNOWN_MODIFIERS))
+            self.MUTUALLY_EXCLUSIVE_MODIFIERS = [set(map(str.lower, ms)) for ms in self.MUTUALLY_EXCLUSIVE_MODIFIERS]
+
+            if self.allowed_indexes:
+                self.allowed_indexes = list(map(str.lower, self.allowed_indexes))
+            if self.allowed_modifiers:
+                self.allowed_modifiers = list(map(str.lower, self.allowed_modifiers))
+                # TODO: update self.MUTUALLY_EXCLUSIVE_MODIFIERS?
+
+    # ----------------------------------------------------
+
+    def visit_SearchClause(self, node: SearchClause):
+        index = node.index
+        if index:
+            if self.case_insensitive:
+                index = index.lower()
+            if self.allowed_indexes:
+                if index not in self.allowed_indexes:
+                    self.validation_error(
+                        node, f"Unknown index '{node.index}' (only allowed: {self.allowed_indexes!r})!"
+                    )
+            else:
+                if index not in self.KNOWN_INDEXES:
+                    if index == "def":
+                        self.validation_warning(
+                            node, f"Usage of legacy definition index '{node.index}'. Please update to 'definition'."
+                        )
+                    else:
+                        self.validation_error(node, f"Unknown index '{node.index}'!")
+
+        # TODO: check `search_term` against relations/modifiers? (regex/masked)
+
+        # warn about single quotes (not working being quotes?)
+        search_term = node.search_term
+        if search_term.startswith("'") and search_term.endswith("'"):
+            self.validation_warning(
+                node,
+                (
+                    f"Search term {search_term!r} is enclosed with single quotes [']."
+                    ' Single quotes are not used quoting, only double qoutes ["]!'
+                    " Endpoint may include the literal single quote when searching."
+                ),
+            )
+
+        super().visit_SearchClause(node)
+
+    def visit_Relation(self, node: Relation):
+        #  parent = self.stack[-1]
+
+        relation = node.relation
+        if self.case_insensitive:
+            relation = relation.lower()
+        if relation not in self.KNOWN_RELATIONS:
+            self.validation_error(node, f"Relation '{node.relation}' is unspecified!")
+
+        # check modifiers
+        if node.modifiers:
+            if relation == "is":
+                self.validation_error(node, f"Relation '{node.relation}' does not support any modifiers!")
+            # TODO: relation == "==", what modifiers make sense here?
+
+            # check duplicate modifiers (should not be useful in any scenario imaginable)
+            modifier_names: Set[str] = set()
+            for modifier in node.modifiers:
+                modifier_name = modifier.name
+                if self.case_insensitive:
+                    modifier_name = modifier_name.lower()
+                if modifier_name in modifier_names:
+                    self.validation_warning(
+                        node, f"Relation '{node.relation}' has duplicate modifier '{modifier.name}'?"
+                    )
+                modifier_names.add(modifier_name)
+
+            # check modifiers that ignore/respect do not appear together
+            if len(modifier_names) >= 2:
+                for i, excl_set in enumerate(self.MUTUALLY_EXCLUSIVE_MODIFIERS):
+                    intersection = excl_set & modifier_names
+                    if len(intersection) > 1:
+                        self.validation_warning(
+                            node,
+                            (
+                                f"Relation '{node.relation}' uses mutually exclusive modifiers"
+                                f" {sorted(modifier_names)!r} (not allowed together "
+                                f"{sorted(LexCQLValidatorV1_0.MUTUALLY_EXCLUSIVE_MODIFIERS[i])!r})!"
+                            ),
+                        )
+
+        super().visit_Relation(node)
+
+    def visit_Modifier(self, node: Modifier):
+        #  parent = self.stack[-1]
+
+        name = node.name
+        if self.case_insensitive:
+            name = name.lower()
+        if self.allowed_modifiers:
+            if name not in self.allowed_modifiers:
+                self.validation_error(
+                    node, f"Unknown modifier '{node.name}' (only allowed: {self.allowed_modifiers!r})!"
+                )
+        else:
+            if name not in self.KNOWN_MODIFIERS:
+                self.validation_error(node, f"Modifier '{node.name}' is unspecified!")
+
+        # check against parent? --> visit_Relation "is" check
+
+        relation = node.relation
+        if relation and name != "lang":
+            if self.allowed_modifiers and name in self.allowed_modifiers and name not in self.KNOWN_MODIFIERS:
+                self.validation_warning(node, f"Custom modifier '{node.name}' may not support any extra relation?")
+            else:
+                self.validation_error(node, f"Modifier '{node.name}' does not support any extra relation!")
+
+        if not relation and name == "lang":
+            self.validation_error(node, f"Modifier '{node.name}' requires a relation value, e.g. 'lang=deu'.")
+
+        if relation and relation != "=":
+            self.validation_error(node, f"Modifier '{node.name}' uses unspecified relation: {relation!r}!")
+
+        # TODO: check valid `node.value` for lang modifier?
+
+
 # ---------------------------------------------------------------------------
 
 VALIDATORS: Dict[str, Type[Validator]] = {
+    LexCQLValidatorV1_0.SPECIFICATION_VERSION: LexCQLValidatorV1_0,
     LexCQLValidatorV0_3.SPECIFICATION_VERSION: LexCQLValidatorV0_3,
 }
 """Mapping of all known LexCQL Validators. Uses the LexCQL specification
 version as the key and returns the ``Validator`` class for instantiating."""
 
-DEFAULT_VALIDATOR_SPECIFICATION_VERSION = LexCQLValidatorV0_3.SPECIFICATION_VERSION
+DEFAULT_VALIDATOR_SPECIFICATION_VERSION = LexCQLValidatorV1_0.SPECIFICATION_VERSION
 """The default LexCQL specification version for query validation."""
 
 # ---------------------------------------------------------------------------

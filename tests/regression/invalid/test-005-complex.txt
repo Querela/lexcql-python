@@ -1,0 +1,2 @@
+pos = "NOUN" NOT "lion" AND definition = carnivore
+pos = "NOUN" NOT "lion"

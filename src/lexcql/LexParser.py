@@ -20,7 +20,7 @@ def serializedATN():
         12,12,12,95,1,13,1,13,1,13,3,13,101,8,13,1,14,1,14,1,15,1,15,1,15,
         1,16,1,16,1,17,1,17,1,17,1,17,1,18,1,18,1,19,1,19,1,19,0,0,20,0,
         2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,0,3,1,0,15,
-        16,1,0,3,9,1,0,11,13,107,0,40,1,0,0,0,2,43,1,0,0,0,4,57,1,0,0,0,
+        16,1,0,3,9,1,0,11,12,107,0,40,1,0,0,0,2,43,1,0,0,0,4,57,1,0,0,0,
         6,62,1,0,0,0,8,66,1,0,0,0,10,70,1,0,0,0,12,72,1,0,0,0,14,78,1,0,
         0,0,16,82,1,0,0,0,18,84,1,0,0,0,20,86,1,0,0,0,22,90,1,0,0,0,24,93,
         1,0,0,0,26,97,1,0,0,0,28,102,1,0,0,0,30,104,1,0,0,0,32,107,1,0,0,
@@ -229,7 +229,7 @@ class LexParser ( Parser ):
             self.state = 49
             self._errHandler.sync(self)
             _la = self._input.LA(1)
-            while (((_la) & ~0x3f) == 0 and ((1 << _la) & 14336) != 0):
+            while _la==11 or _la==12:
                 self.state = 44
                 self.boolean_modified()
                 self.state = 45
@@ -845,9 +845,6 @@ class LexParser ( Parser ):
         def OR(self):
             return self.getToken(LexParser.OR, 0)
 
-        def NOT(self):
-            return self.getToken(LexParser.NOT, 0)
-
         def getRuleIndex(self):
             return LexParser.RULE_r_boolean
 
@@ -877,7 +874,7 @@ class LexParser ( Parser ):
             self.enterOuterAlt(localctx, 1)
             self.state = 90
             _la = self._input.LA(1)
-            if not((((_la) & ~0x3f) == 0 and ((1 << _la) & 14336) != 0)):
+            if not(_la==11 or _la==12):
                 self._errHandler.recoverInline(self)
             else:
                 self._errHandler.reportMatch(self)

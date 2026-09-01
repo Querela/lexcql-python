@@ -1,3 +1,2 @@
-pos = "NOUN" NOT "lion" AND definition = carnivore
 pos = NOUN AND ( lemma = Apfel OR lemma = "Birne" )
 pos = NOUN AND (hyponym = "Word1" OR hypernym = "Word2")

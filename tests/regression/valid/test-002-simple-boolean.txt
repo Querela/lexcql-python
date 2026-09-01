@@ -1,4 +1,3 @@
 Apfel AND Banane
 "apfel" and Banane
 maus OR Katze
-Nil NOT "Pferd"

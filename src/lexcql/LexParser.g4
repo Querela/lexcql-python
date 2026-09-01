@@ -56,7 +56,7 @@ relation_symbol:
 
 boolean_modified: r_boolean modifier_list?;
 
-r_boolean: AND | OR | NOT;
+r_boolean: AND | OR;
 
 /* modifiers */
 
