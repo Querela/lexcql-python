@@ -1,3 +1,5 @@
+from typing import Type
+
 import pytest
 
 from lexcql import validate
@@ -5,7 +7,9 @@ from lexcql.parser import QueryParser
 from lexcql.parser import QueryParserException
 from lexcql.parser import SourceLocation
 from lexcql.validation import LexCQLValidatorV0_3
+from lexcql.validation import LexCQLValidatorV1_0
 from lexcql.validation import SpecificationValidationError
+from lexcql.validation import VALIDATORS
 
 # ---------------------------------------------------------------------------
 
@@ -45,11 +49,14 @@ def test_validate():
     assert validate("post == NOUN", version="0.3") is False
 
 
-def test_validate_v1_0():
+def test_validate_v1_0_changes():
     # with specific version number
     # 0.3 unknown field, 1.0 new field
     assert validate("tense = Fut", version="0.3") is False
     assert validate("tense = Fut", version="1.0") is True
+    # not equal relation new in 1.0 (instead of NOT operator)
+    assert validate("lemma <> car", version="0.3") is False
+    assert validate("lemma <> car", version="1.0") is True
 
 
 def test_validate_with_errors_list():
@@ -83,15 +90,30 @@ def test_validate_with_warnings_list():
     assert len(validate('''lemma =/lang=deu/lang=deu "Stadt"''', return_errors=True, warnings_as_errors=True)) == 1
 
 
+def test_VALIDATORS():
+    version = "0.3"
+    validator_cls = VALIDATORS.get(version, None)
+    assert validator_cls == LexCQLValidatorV0_3
+    assert version == LexCQLValidatorV0_3.SPECIFICATION_VERSION
+
+    # ------------------------------------------
+
+    version = "1.0"
+    validator_cls = VALIDATORS.get(version, None)
+    assert validator_cls == LexCQLValidatorV1_0
+    assert version == LexCQLValidatorV1_0.SPECIFICATION_VERSION
+
+
 # ---------------------------------------------------------------------------
-# test for LexCQL v0.3
+# test for LexCQL v0.3/v1.0
 
 
-def test_validation_basic_v0_3(parser: QueryParser):
+@pytest.mark.parametrize("validator_cls", [LexCQLValidatorV0_3, LexCQLValidatorV1_0])
+def test_validation_basic(parser: QueryParser, validator_cls: Type[LexCQLValidatorV0_3 | LexCQLValidatorV1_0]):
     query = """Banane"""
     node = parser.parse(query)
 
-    validator = LexCQLValidatorV0_3()
+    validator = validator_cls()
     assert validator.query is None
 
     validator.validate(node, query=query)
@@ -99,7 +121,7 @@ def test_validation_basic_v0_3(parser: QueryParser):
     assert not validator.errors
 
     # create validator with a query string (which might not be the real one)
-    validator = LexCQLValidatorV0_3(query="test")
+    validator = validator_cls(query="test")
     assert validator.query == "test"
     # the query will be overwritten in the .validate() method
     validator.validate(node, query=query)
@@ -117,19 +139,22 @@ def test_validation_basic_v0_3(parser: QueryParser):
     assert not validator.errors
 
 
-def test_validation_violation_basic_v0_3(parser: QueryParser):
+@pytest.mark.parametrize("validator_cls", [LexCQLValidatorV0_3, LexCQLValidatorV1_0])
+def test_validation_violation_basic(
+    parser: QueryParser, validator_cls: Type[LexCQLValidatorV0_3 | LexCQLValidatorV1_0]
+):
     query = """doesnotexist = Banane"""
     node = parser.parse(query)
 
     # fail on first violation
-    validator = LexCQLValidatorV0_3(raise_at_first_violation=True)
+    validator = validator_cls(raise_at_first_violation=True)
     with pytest.raises(SpecificationValidationError) as exc:
         validator.validate(node, query=query)
     assert exc.match("Unknown index 'doesnotexist'!")
     assert exc.value.query_fragment == query
 
     # or we can record violations
-    validator = LexCQLValidatorV0_3(raise_at_first_violation=False)
+    validator = validator_cls(raise_at_first_violation=False)
     is_valid = validator.validate(node, query=query)
     assert is_valid is False
     assert len(validator.errors) == 1
@@ -146,26 +171,29 @@ def test_validation_violation_basic_v0_3(parser: QueryParser):
     query = """Apfel OR doesnotexist = Banane"""
     node = parser.parse(query)
 
-    validator = LexCQLValidatorV0_3(raise_at_first_violation=True)
+    validator = validator_cls(raise_at_first_violation=True)
     with pytest.raises(SpecificationValidationError) as exc:
         validator.validate(node, query=query)
     assert exc.match("Unknown index 'doesnotexist'!")
     assert exc.value.query_fragment == """doesnotexist = Banane"""
 
 
-def test_validation_violation_multiple_v0_3(parser: QueryParser):
+@pytest.mark.parametrize("validator_cls", [LexCQLValidatorV0_3, LexCQLValidatorV1_0])
+def test_validation_violation_multiple(
+    parser: QueryParser, validator_cls: Type[LexCQLValidatorV0_3 | LexCQLValidatorV1_0]
+):
 
     query = '''doesnotexist = Banane AND alsoinvalid = "grüner Apfel"'''
     node = parser.parse(query)
 
-    validator = LexCQLValidatorV0_3(raise_at_first_violation=True)
+    validator = validator_cls(raise_at_first_violation=True)
     with pytest.raises(SpecificationValidationError) as exc:
         validator.validate(node, query=query)
     assert exc.match("Unknown index 'doesnotexist'!")
     assert exc.value.query_fragment == """doesnotexist = Banane"""
     assert len(validator.errors) == 0
 
-    validator = LexCQLValidatorV0_3(raise_at_first_violation=False)
+    validator = validator_cls(raise_at_first_violation=False)
     is_valid = validator.validate(node, query=query)
     assert is_valid is False
     assert len(validator.errors) == 2
@@ -175,42 +203,40 @@ def test_validation_violation_multiple_v0_3(parser: QueryParser):
     assert validator.errors[1].fragment == '''alsoinvalid = "grüner Apfel"'''
 
 
-def test_validation_violation_modifier_value_v0_3(parser: QueryParser):
-    # lang relation modifier requires a value
-    query = """lemma =/lang Apfel"""
-    node = parser.parse(query)
-    validator = LexCQLValidatorV0_3(raise_at_first_violation=True)
-    with pytest.raises(SpecificationValidationError) as exc:
-        validator.validate(node, query=query)
-    assert exc.match("Modifier 'lang' requires a relation value, e.g. 'lang=deu'.")
-    assert exc.value.query_fragment == "/lang"
-
+@pytest.mark.parametrize("validator_cls", [LexCQLValidatorV0_3, LexCQLValidatorV1_0])
+def test_validation_violation_modifier_value(
+    parser: QueryParser, validator_cls: Type[LexCQLValidatorV0_3 | LexCQLValidatorV1_0]
+):
     # any other relation modifier does not support an extra relation+value
     query = """lemma =/respectCase=no apfel"""
     node = parser.parse(query)
-    validator = LexCQLValidatorV0_3(raise_at_first_violation=True)
+    validator = validator_cls(raise_at_first_violation=True)
     with pytest.raises(SpecificationValidationError) as exc:
         validator.validate(node, query=query)
     assert exc.match("Modifier 'respectCase' does not support any extra relation!")
     assert exc.value.query_fragment == "/respectCase=no"
 
 
-def test_validation_violation_modifier_relation_v0_3(parser: QueryParser):
+@pytest.mark.parametrize("validator_cls", [LexCQLValidatorV0_3, LexCQLValidatorV1_0])
+def test_validation_violation_modifier_relation(
+    parser: QueryParser, validator_cls: Type[LexCQLValidatorV0_3 | LexCQLValidatorV1_0]
+):
     # relation modifier with a relation not EQUALS "="
     query = """lemma = /lang<>deu apfel"""
     node = parser.parse(query)
-    validator = LexCQLValidatorV0_3(raise_at_first_violation=True)
+    validator = validator_cls(raise_at_first_violation=True)
     with pytest.raises(SpecificationValidationError) as exc:
         validator.validate(node, query=query)
     assert exc.match("Modifier 'lang' uses unspecified relation: '<>'!")
     assert exc.value.query_fragment == "/lang<>deu"
 
 
-def test_validation_custom_index_v0_3(parser: QueryParser):
+@pytest.mark.parametrize("validator_cls", [LexCQLValidatorV0_3, LexCQLValidatorV1_0])
+def test_validation_custom_index(parser: QueryParser, validator_cls: Type[LexCQLValidatorV0_3 | LexCQLValidatorV1_0]):
     query = """doesnotexist = Banane"""
     node = parser.parse(query)
 
-    validator = LexCQLValidatorV0_3(allowed_indexes=["doesnotexist"], raise_at_first_violation=True)
+    validator = validator_cls(allowed_indexes=["doesnotexist"], raise_at_first_violation=True)
     is_valid = validator.validate(node, query=query)
     assert is_valid is True
 
@@ -219,23 +245,24 @@ def test_validation_custom_index_v0_3(parser: QueryParser):
     node = parser.parse(query)
 
     # NOTE: do not do this unless strictly necessary!
-    validator = LexCQLValidatorV0_3(allowed_indexes=["doesnotexist"], raise_at_first_violation=True)
+    validator = validator_cls(allowed_indexes=["doesnotexist"], raise_at_first_violation=True)
     with pytest.raises(SpecificationValidationError) as exc:
         validator.validate(node, query=query)
     assert exc.match(r"Unknown index 'lemma' \(only allowed: \['doesnotexist'\]\)!")
     assert exc.value.query_fragment == query
 
     # while normally
-    validator = LexCQLValidatorV0_3(allowed_indexes=None, raise_at_first_violation=True)
+    validator = validator_cls(allowed_indexes=None, raise_at_first_violation=True)
     is_valid = validator.validate(node, query=query)
     assert is_valid is True
 
 
-def test_validation_warning_def_v0_3(parser: QueryParser):
+@pytest.mark.parametrize("validator_cls", [LexCQLValidatorV0_3, LexCQLValidatorV1_0])
+def test_validation_warning_def(parser: QueryParser, validator_cls: Type[LexCQLValidatorV0_3 | LexCQLValidatorV1_0]):
     query = """def = Banane"""
     node = parser.parse(query)
 
-    validator = LexCQLValidatorV0_3(raise_at_first_violation=False, warnings_as_errors=False)
+    validator = validator_cls(raise_at_first_violation=False, warnings_as_errors=False)
     is_valid = validator.validate(node, query=query)
     assert is_valid is True
     assert len(validator.errors) == 0
@@ -245,11 +272,12 @@ def test_validation_warning_def_v0_3(parser: QueryParser):
     assert validator.warnings[0].type == "validation-warning"
 
 
-def test_validation_warnings_v0_3(parser: QueryParser):
+@pytest.mark.parametrize("validator_cls", [LexCQLValidatorV0_3, LexCQLValidatorV1_0])
+def test_validation_warnings(parser: QueryParser, validator_cls: Type[LexCQLValidatorV0_3 | LexCQLValidatorV1_0]):
     query = "lemma = 'Banane'"
     node = parser.parse(query)
 
-    validator = LexCQLValidatorV0_3(raise_at_first_violation=True)
+    validator = validator_cls(raise_at_first_violation=True)
     is_valid = validator.validate(node, query=query)
     assert is_valid is True
     assert len(validator.warnings) == 1
@@ -268,11 +296,14 @@ def test_validation_warnings_v0_3(parser: QueryParser):
     node = parser.parse(query)
 
 
-def test_validation_warnings_for_custom_names_v0_3(parser: QueryParser):
+@pytest.mark.parametrize("validator_cls", [LexCQLValidatorV0_3, LexCQLValidatorV1_0])
+def test_validation_warnings_for_custom_names(
+    parser: QueryParser, validator_cls: Type[LexCQLValidatorV0_3 | LexCQLValidatorV1_0]
+):
     query = "lemma =/xlang=deu-de apfel"
     node = parser.parse(query)
 
-    validator = LexCQLValidatorV0_3(allowed_modifiers=["xlang"], raise_at_first_violation=False)
+    validator = validator_cls(allowed_modifiers=["xlang"], raise_at_first_violation=False)
     is_valid = validator.validate(node, query=query)
     assert is_valid is True
     assert len(validator.errors) == 0
@@ -281,12 +312,15 @@ def test_validation_warnings_for_custom_names_v0_3(parser: QueryParser):
     assert validator.warnings[0].fragment == "/xlang=deu-de"
 
 
-def test_validation_warnings_for_modifiers_v0_3(parser: QueryParser):
+@pytest.mark.parametrize("validator_cls", [LexCQLValidatorV0_3, LexCQLValidatorV1_0])
+def test_validation_warnings_for_modifiers(
+    parser: QueryParser, validator_cls: Type[LexCQLValidatorV0_3 | LexCQLValidatorV1_0]
+):
     # duplicate modifiers
     query = "lemma =/lang=deu/lang=eng apfel"
     node = parser.parse(query)
 
-    validator = LexCQLValidatorV0_3(raise_at_first_violation=True, warnings_as_errors=False)
+    validator = validator_cls(raise_at_first_violation=True, warnings_as_errors=False)
     is_valid = validator.validate(node, query=query)
     assert is_valid is True
     assert len(validator.errors) == 0
@@ -300,7 +334,7 @@ def test_validation_warnings_for_modifiers_v0_3(parser: QueryParser):
     query = "lemma =/ignoreCASE/respectCase Apfel"
     node = parser.parse(query)
 
-    validator = LexCQLValidatorV0_3(case_insensitive=True, raise_at_first_violation=True, warnings_as_errors=False)
+    validator = validator_cls(case_insensitive=True, raise_at_first_violation=True, warnings_as_errors=False)
     is_valid = validator.validate(node, query=query)
     assert is_valid is True
     assert len(validator.errors) == 0
@@ -317,11 +351,147 @@ def test_validation_warnings_for_modifiers_v0_3(parser: QueryParser):
     query = "lemma =/ignoreCASE/respectCase/lang=deu/lang=deu Apfel"
     node = parser.parse(query)
 
-    validator = LexCQLValidatorV0_3(case_insensitive=True, raise_at_first_violation=True, warnings_as_errors=False)
+    validator = validator_cls(case_insensitive=True, raise_at_first_violation=True, warnings_as_errors=False)
     is_valid = validator.validate(node, query=query)
     assert is_valid is True
     assert len(validator.errors) == 0
     assert len(validator.warnings) == 2
+
+
+# ---------------------------------------------------------------------------
+# test for LexCQL v0.3
+
+
+def test_validation_violation_modifier_value_v0_3(parser: QueryParser):
+    # lang relation modifier requires a value
+    query = """lemma =/lang Apfel"""
+    node = parser.parse(query)
+    validator = LexCQLValidatorV0_3(raise_at_first_violation=True)
+    with pytest.raises(SpecificationValidationError) as exc:
+        validator.validate(node, query=query)
+    assert exc.match("Modifier 'lang' requires a relation value, e.g. 'lang=deu'.")
+    assert exc.value.query_fragment == "/lang"
+
+
+# ---------------------------------------------------------------------------
+# test for LexCQL v1.0
+
+
+def test_validation_violation_modifier_value_v1_0(parser: QueryParser):
+    # lang relation modifier requires a value
+    query = """lemma =/lang Apfel"""
+    node = parser.parse(query)
+    validator = LexCQLValidatorV1_0(raise_at_first_violation=True)
+    with pytest.raises(SpecificationValidationError) as exc:
+        validator.validate(node, query=query)
+    assert exc.match("Modifier 'lang' requires a relation value, e.g. 'lang=de'.")
+    assert exc.value.query_fragment == "/lang"
+
+
+def test_validation_is_entity_values_v1_0(parser: QueryParser):
+    query = "lemma is apfel"
+    node = parser.parse(query)
+
+    # unknown entity value, lemma index/field also does not support any
+    validator = LexCQLValidatorV1_0(case_insensitive=True, raise_at_first_violation=False, warnings_as_errors=False)
+    is_valid = validator.validate(node, query=query)
+    assert is_valid is False
+    assert len(validator.errors) == 1
+    assert len(validator.warnings) == 0
+    assert validator.errors[0].fragment == "lemma is apfel"
+    assert (
+        validator.errors[0].message
+        == "Found search term 'apfel' that is not an entity URI. Index 'lemma' also doesn't have any known UD feature/POS values."
+    )
+
+    # ------------------------------------------
+
+    # warn if custom prefix, but allowed
+    query = "lemma is special:value"
+    node = parser.parse(query)
+    validator = LexCQLValidatorV1_0(case_insensitive=True, raise_at_first_violation=False, warnings_as_errors=False)
+    is_valid = validator.validate(node, query=query)
+    assert is_valid is True
+    assert len(validator.errors) == 0
+    assert len(validator.warnings) == 1
+    assert validator.warnings[0].fragment == "lemma is special:value"
+    assert validator.warnings[0].message == "Detected custom namespace 'special' usage for search term!"
+
+    # ------------------------------------------
+
+    # use some known entity value
+    query = "tense is Fut"
+    node = parser.parse(query)
+    validator = LexCQLValidatorV1_0(case_insensitive=True, raise_at_first_violation=False, warnings_as_errors=False)
+    is_valid = validator.validate(node, query=query)
+    assert is_valid is True
+    assert len(validator.errors) == 0
+    assert len(validator.warnings) == 0
+
+    # ------------------------------------------
+
+    # warn if custom prefix
+    query = "tense is custom:Fut"
+    node = parser.parse(query)
+    validator = LexCQLValidatorV1_0(case_insensitive=True, raise_at_first_violation=False, warnings_as_errors=False)
+    is_valid = validator.validate(node, query=query)
+    assert is_valid is True
+    assert len(validator.errors) == 0
+    assert len(validator.warnings) == 1
+    assert validator.warnings[0].fragment == "tense is custom:Fut"
+    assert validator.warnings[0].message == "Detected custom namespace 'custom' usage for search term!"
+
+    # ------------------------------------------
+
+    # search terms are not case insensitive by default
+    query = "tense is fUt"
+    node = parser.parse(query)
+    validator = LexCQLValidatorV1_0(case_insensitive=False, raise_at_first_violation=False, warnings_as_errors=False)
+    is_valid = validator.validate(node, query=query)
+    assert is_valid is False
+    assert len(validator.errors) == 1
+    assert len(validator.warnings) == 0
+    assert validator.errors[0].fragment == "tense is fUt"
+    assert validator.errors[0].message == "Found search term 'fUt' with unknown entity value!"
+
+    # ------------------------------------------
+
+    # let's allow case insensitive search terms (not recommended!)
+    query = "tense is fUt"
+    node = parser.parse(query)
+    validator = LexCQLValidatorV1_0(case_insensitive=True, raise_at_first_violation=False, warnings_as_errors=False)
+    is_valid = validator.validate(node, query=query)
+    assert is_valid is True
+    assert len(validator.errors) == 0
+    assert len(validator.warnings) == 1
+    assert validator.warnings[0].fragment == "tense is fUt"
+    assert (
+        validator.warnings[0].message
+        == "Found search term 'fUt' in known entity values for index 'tense' BUT only when lowercasing everything which is endpoint/server dependant and must not be expected!"
+    )
+
+    # ------------------------------------------
+
+    # let's allow case insensitive search terms via relation modifier (maybe ok? depends on server)
+    # TODO: but currently probably not supported?
+    query = "tense is/ignoreCase fUt"
+    node = parser.parse(query)
+    validator = LexCQLValidatorV1_0(case_insensitive=False, raise_at_first_violation=False, warnings_as_errors=False)
+    is_valid = validator.validate(node, query=query)
+    # assert is_valid is False
+    # assert len(validator.errors) == 1
+    # assert len(validator.warnings) == 1
+    # assert validator.errors[0].fragment == "is/ignoreCase"
+    # assert validator.errors[0].message == "Relation 'is' does not support any modifiers!"
+
+    assert is_valid is True
+    assert len(validator.errors) == 0
+    assert len(validator.warnings) == 1
+    assert validator.warnings[0].fragment == "tense is/ignoreCase fUt"
+    assert (
+        validator.warnings[0].message
+        == "Found search term 'fUt' in known entity values for index 'tense' BUT only due to 'ignoreCase' relation modifier which is optional for endpoints/servers and must not be expected!"
+    )
 
 
 # ---------------------------------------------------------------------------

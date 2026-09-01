@@ -7,6 +7,7 @@ from typing import Optional
 from typing import Set
 from typing import Type
 from typing import TypeVar
+from urllib.parse import urlparse
 
 from lexcql.parser import ErrorDetail
 from lexcql.parser import Modifier
@@ -511,6 +512,28 @@ class LexCQLValidatorV1_0(Validator[None]):
         "citation",
     ]
     """List of LexCQL indexes (LexCQL field names)"""
+    KNOWN_INDEXES_FOR_DEFAULT_ENTITY_NAMESPACES = {
+        "case": {
+            # fmt:off
+            "Abs", "Acc", "Erg", "Nom",
+            "Abe", "Ben", "Cau", "Cmp", "Cns", "Com", "Dat", "Dis", "Equ", "Gen", "Ins", "Par", "Tem", "Tra", "Voc",
+            "Abl", "Add", "Ade", "All", "Del", "Ela", "Ess", "Ill", "Ine", "Lat", "Loc", "Per", "Sbe", "Sbl", "Spl", "Sub", "Sup", "Ter",
+            # fmt:on
+        },
+        "degree": {"Abs", "Aug", "Cmp", "Dim", "Equ", "Pos", "Sup"},
+        "gender": {"Com", "Fem", "Masc", "Neut"},
+        "mood": {"Adm", "Cnd", "Des", "Imp", "Ind", "Int", "Irr", "Jus", "Nec", "Opt", "Pot", "Prp", "Qot", "Sub"},
+        "number": {"Coll", "Count", "Dual", "Grpa", "Grpl", "Inv", "Pauc", "Plur", "Ptan", "Sing", "Tri"},
+        "pos": {
+            # fmt:off
+            "ADJ", "ADV", "INTJ", "NOUN", "PROPN", "VERB",
+            "ADP", "AUX", "CCONJ", "DET", "NUM", "PART", "PRON", "SCONJ",
+            "PUNCT", "SYM", "X",
+            # fmt:on
+        },
+        "sentiment": {"Neg", "Pos"},
+        "tense": {"Fut", "Imp", "Past", "Pqp", "Pres"},
+    }
     KNOWN_RELATIONS = ["=", "==", "<>", "is"]
     """List of LexCQL relations"""
     KNOWN_MODIFIERS = [
@@ -575,6 +598,9 @@ class LexCQLValidatorV1_0(Validator[None]):
             self.KNOWN_RELATIONS = list(map(str.lower, self.KNOWN_RELATIONS))
             self.KNOWN_MODIFIERS = list(map(str.lower, self.KNOWN_MODIFIERS))
             self.MUTUALLY_EXCLUSIVE_MODIFIERS = [set(map(str.lower, ms)) for ms in self.MUTUALLY_EXCLUSIVE_MODIFIERS]
+            self.KNOWN_INDEXES_FOR_DEFAULT_ENTITY_NAMESPACES = {
+                k.lower(): v for k, v in self.KNOWN_INDEXES_FOR_DEFAULT_ENTITY_NAMESPACES.items()
+            }
 
             if self.allowed_indexes:
                 self.allowed_indexes = list(map(str.lower, self.allowed_indexes))
@@ -617,7 +643,88 @@ class LexCQLValidatorV1_0(Validator[None]):
                 ),
             )
 
+        self.check_is_default_entity_namespace(node)
+
         super().visit_SearchClause(node)
+
+    def check_is_default_entity_namespace(self, node: SearchClause):
+        # abort if term-only search clause or relation not "is"
+        if node.relation is None:
+            return
+
+        relation = node.relation.relation
+        if self.case_insensitive:
+            relation = relation.lower()
+        if relation != "is":
+            return
+
+        index = node.index
+        if self.case_insensitive:
+            index = index.lower()
+
+        search_term = node.search_term
+
+        # check if likely URI (prefixed or HTTP(S)://)
+        if ":" in search_term:
+            # TODO: check if known prefix and warn if custom?
+            try:
+                parsed = urlparse(search_term)
+                prefix = parsed.scheme
+                # HTTP/HTTPS is generic, everything else is not defined and endpoint/server specific
+                if prefix.lower() not in {"http", "https"}:
+                    self.validation_warning(node, f"Detected custom namespace {prefix!r} usage for search term!")
+            except Exception as ex:
+                self.validation_error(node, f"Unable to parse search term as entity URI! Error: {ex}")
+            return
+
+        # check if default entity namespace value since not an URI
+        if index in self.KNOWN_INDEXES_FOR_DEFAULT_ENTITY_NAMESPACES:
+            allowed_terms = self.KNOWN_INDEXES_FOR_DEFAULT_ENTITY_NAMESPACES[index]
+            if search_term in allowed_terms:
+                # valid index, and known search term entity value
+                return
+
+            allowed_terms_lc = {term.lower() for term in allowed_terms}
+
+            # some last chance checks
+            if self.case_insensitive:
+                if search_term.lower() in allowed_terms_lc:
+                    self.validation_warning(
+                        node,
+                        (
+                            f"Found search term {search_term!r} in known entity values for index {index!r}"
+                            f" BUT only when lowercasing everything which is endpoint/server dependant"
+                            " and must not be expected!"
+                        ),
+                    )
+                    return
+
+            if any(
+                mod.name == "ignoreCase" or (self.case_insensitive and mod.name.lower() == "ignorecase")
+                for mod in node.relation.modifiers
+            ):
+                # has lowercase/ignorecase relation modifier which might allow case insensitive checks?
+                if search_term.lower() in allowed_terms_lc:
+                    self.validation_warning(
+                        node,
+                        (
+                            f"Found search term {search_term!r} in known entity values for index {index!r}"
+                            f" BUT only due to 'ignoreCase' relation modifier which is optional for endpoints/servers"
+                            " and must not be expected!"
+                        ),
+                    )
+                return
+
+            self.validation_error(node, f"Found search term {search_term!r} with unknown entity value!")
+
+        else:
+            self.validation_error(
+                node,
+                (
+                    f"Found search term {search_term!r} that is not an entity URI."
+                    f" Index {index!r} also doesn't have any known UD feature/POS values."
+                ),
+            )
 
     def visit_Relation(self, node: Relation):
         #  parent = self.stack[-1]
@@ -630,8 +737,9 @@ class LexCQLValidatorV1_0(Validator[None]):
 
         # check modifiers
         if node.modifiers:
-            if relation == "is":
-                self.validation_error(node, f"Relation '{node.relation}' does not support any modifiers!")
+            # TODO: relation == "is", what modifiers make sense here? (regexp for pattern matching, ignoreCase for less strict checks, accents?)
+            # if relation == "is":
+            #     self.validation_error(node, f"Relation '{node.relation}' does not support any modifiers!")
             # TODO: relation == "==", what modifiers make sense here?
 
             # check duplicate modifiers (should not be useful in any scenario imaginable)
@@ -687,12 +795,13 @@ class LexCQLValidatorV1_0(Validator[None]):
                 self.validation_error(node, f"Modifier '{node.name}' does not support any extra relation!")
 
         if not relation and name == "lang":
-            self.validation_error(node, f"Modifier '{node.name}' requires a relation value, e.g. 'lang=deu'.")
+            self.validation_error(node, f"Modifier '{node.name}' requires a relation value, e.g. 'lang=de'.")
 
         if relation and relation != "=":
             self.validation_error(node, f"Modifier '{node.name}' uses unspecified relation: {relation!r}!")
 
         # TODO: check valid `node.value` for lang modifier?
+        # TODO: check BCP47 language codes
 
 
 # ---------------------------------------------------------------------------
