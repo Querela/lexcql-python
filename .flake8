@@ -9,4 +9,6 @@ exclude =
     src/lexcql/LexLexer.py,
     src/lexcql/LexParserListener.py,
     src/lexcql/LexParserVisitor.py
+per-file-ignores =
+    tests/validation/test_validation.py:E501
 docstring-convention = google

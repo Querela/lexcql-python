@@ -512,6 +512,7 @@ class LexCQLValidatorV1_0(Validator[None]):
         "citation",
     ]
     """List of LexCQL indexes (LexCQL field names)"""
+    # flake8: noqa
     KNOWN_INDEXES_FOR_DEFAULT_ENTITY_NAMESPACES = {
         "case": {
             # fmt:off
@@ -649,7 +650,7 @@ class LexCQLValidatorV1_0(Validator[None]):
 
     def check_is_default_entity_namespace(self, node: SearchClause):
         # abort if term-only search clause or relation not "is"
-        if node.relation is None:
+        if node.relation is None or node.index is None:
             return
 
         relation = node.relation.relation

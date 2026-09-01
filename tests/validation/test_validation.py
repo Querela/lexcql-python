@@ -6,10 +6,10 @@ from lexcql import validate
 from lexcql.parser import QueryParser
 from lexcql.parser import QueryParserException
 from lexcql.parser import SourceLocation
+from lexcql.validation import VALIDATORS
 from lexcql.validation import LexCQLValidatorV0_3
 from lexcql.validation import LexCQLValidatorV1_0
 from lexcql.validation import SpecificationValidationError
-from lexcql.validation import VALIDATORS
 
 # ---------------------------------------------------------------------------
 
