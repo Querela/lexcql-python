@@ -10,7 +10,7 @@ else:
 
 def serializedATN():
     return [
-        4,1,17,118,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,
+        4,1,18,118,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,
         6,2,7,7,7,2,8,7,8,2,9,7,9,2,10,7,10,2,11,7,11,2,12,7,12,2,13,7,13,
         2,14,7,14,2,15,7,15,2,16,7,16,2,17,7,17,2,18,7,18,2,19,7,19,1,0,
         1,0,1,0,1,1,1,1,1,1,1,1,5,1,48,8,1,10,1,12,1,51,9,1,1,2,1,2,1,2,
@@ -19,8 +19,8 @@ def serializedATN():
         8,8,1,9,1,9,1,10,1,10,3,10,89,8,10,1,11,1,11,1,12,4,12,94,8,12,11,
         12,12,12,95,1,13,1,13,1,13,3,13,101,8,13,1,14,1,14,1,15,1,15,1,15,
         1,16,1,16,1,17,1,17,1,17,1,17,1,18,1,18,1,19,1,19,1,19,0,0,20,0,
-        2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,0,3,1,0,15,
-        16,1,0,3,9,1,0,11,12,107,0,40,1,0,0,0,2,43,1,0,0,0,4,57,1,0,0,0,
+        2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,0,3,1,0,16,
+        17,1,0,3,9,1,0,11,12,107,0,40,1,0,0,0,2,43,1,0,0,0,4,57,1,0,0,0,
         6,62,1,0,0,0,8,66,1,0,0,0,10,70,1,0,0,0,12,72,1,0,0,0,14,78,1,0,
         0,0,16,82,1,0,0,0,18,84,1,0,0,0,20,86,1,0,0,0,22,90,1,0,0,0,24,93,
         1,0,0,0,26,97,1,0,0,0,28,102,1,0,0,0,30,104,1,0,0,0,32,107,1,0,0,
@@ -42,9 +42,9 @@ def serializedATN():
         0,96,25,1,0,0,0,97,98,5,10,0,0,98,100,3,28,14,0,99,101,3,30,15,0,
         100,99,1,0,0,0,100,101,1,0,0,0,101,27,1,0,0,0,102,103,3,38,19,0,
         103,29,1,0,0,0,104,105,3,18,9,0,105,106,3,32,16,0,106,31,1,0,0,0,
-        107,108,7,0,0,0,108,33,1,0,0,0,109,110,3,36,18,0,110,111,5,14,0,
+        107,108,7,0,0,0,108,33,1,0,0,0,109,110,3,36,18,0,110,111,5,15,0,
         0,111,112,3,38,19,0,112,35,1,0,0,0,113,114,3,38,19,0,114,37,1,0,
-        0,0,115,116,5,16,0,0,116,39,1,0,0,0,10,49,57,62,70,74,78,82,88,95,
+        0,0,115,116,5,17,0,0,116,39,1,0,0,0,10,49,57,62,70,74,78,82,88,95,
         100
     ]
 
@@ -60,12 +60,12 @@ class LexParser ( Parser ):
 
     literalNames = [ "<INVALID>", "'('", "')'", "'='", "'>'", "'<'", "'>='", 
                      "'<='", "'<>'", "'=='", "'/'", "<INVALID>", "<INVALID>", 
-                     "<INVALID>", "'.'" ]
+                     "<INVALID>", "<INVALID>", "'.'" ]
 
     symbolicNames = [ "<INVALID>", "L_PAREN", "R_PAREN", "EQUAL", "GREATER", 
                       "LESSER", "GREATER_EQUAL", "LESSER_EQUAL", "NOT_EQUAL", 
-                      "EQUAL_EQUAL", "SLASH", "AND", "OR", "NOT", "DOT", 
-                      "QUOTED_STRING", "SIMPLE_STRING", "WS" ]
+                      "EQUAL_EQUAL", "SLASH", "AND", "OR", "NOT", "PROX", 
+                      "DOT", "QUOTED_STRING", "SIMPLE_STRING", "WS" ]
 
     RULE_query = 0
     RULE_boolean_query = 1
@@ -109,10 +109,11 @@ class LexParser ( Parser ):
     AND=11
     OR=12
     NOT=13
-    DOT=14
-    QUOTED_STRING=15
-    SIMPLE_STRING=16
-    WS=17
+    PROX=14
+    DOT=15
+    QUOTED_STRING=16
+    SIMPLE_STRING=17
+    WS=18
 
     def __init__(self, input:TokenStream, output:TextIO = sys.stdout):
         super().__init__(input, output)
@@ -305,7 +306,7 @@ class LexParser ( Parser ):
                 self.state = 54
                 self.match(LexParser.R_PAREN)
                 pass
-            elif token in [15, 16]:
+            elif token in [16, 17]:
                 self.enterOuterAlt(localctx, 2)
                 self.state = 56
                 self.search_clause()
@@ -430,7 +431,7 @@ class LexParser ( Parser ):
             self.enterOuterAlt(localctx, 1)
             self.state = 66
             _la = self._input.LA(1)
-            if not(_la==15 or _la==16):
+            if not(_la==16 or _la==17):
                 self._errHandler.recoverInline(self)
             else:
                 self._errHandler.reportMatch(self)
@@ -613,7 +614,7 @@ class LexParser ( Parser ):
             self.state = 78
             self._errHandler.sync(self)
             token = self._input.LA(1)
-            if token in [16]:
+            if token in [17]:
                 self.enterOuterAlt(localctx, 1)
                 self.state = 76
                 self.relation_name()
@@ -1160,7 +1161,7 @@ class LexParser ( Parser ):
             self.enterOuterAlt(localctx, 1)
             self.state = 107
             _la = self._input.LA(1)
-            if not(_la==15 or _la==16):
+            if not(_la==16 or _la==17):
                 self._errHandler.recoverInline(self)
             else:
                 self._errHandler.reportMatch(self)

@@ -1,1 +1,4 @@
 Nil NOT "Pferd"
+"Apfel" NOT "Birne"
+lemma PROX "house"
+"cat" EQUIV "dog"
