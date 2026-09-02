@@ -763,7 +763,7 @@ wheels = [
 
 [[package]]
 name = "lexcql-parser"
-version = "1.4.0a0"
+version = "1.4.0a1"
 source = { editable = "." }
 dependencies = [
     { name = "antlr4-python3-runtime" },
