@@ -164,6 +164,8 @@ uv run twine check --strict dist/*
 tar tvf dist/lexcql_parser-*.tar.gz
 ```
 
+NOTE: publishing a tag to GitHub will run the [`publish-pypi.yml` workflow](.github/workflows/publish-pypi.yml) that builds and publishes to PyPI with attestation.
+
 ## See also
 
 - [clarin-eric/fcq-ql](https://github.com/clarin-eric/fcs-ql) - FCS-QL/LexCQL Parser (Java)
